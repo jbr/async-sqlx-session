@@ -1,0 +1,17 @@
+[package]
+name = "async-sqlx-session"
+version = "0.1.0"
+authors = ["Jacob Rothstein <hi@jbr.me>"]
+edition = "2018"
+
+[features]
+default = ["sqlite"]
+sqlite = ["sqlx/sqlite"]
+
+[dependencies]
+async-session = "1.0.2"
+sqlx = { version = "0.3.5" }
+chrono = "0.4.13"
+
+[patch.crates-io]
+async-session = { git = "https://github.com/jbr/async-session", branch = "tide" }
