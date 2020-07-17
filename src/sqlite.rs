@@ -21,7 +21,7 @@ impl SqliteStore {
     }
 
     pub fn with_table_name(mut self, table_name: String) -> Self {
-        if table_name.chars().any(|c| c.is_ascii_alphanumeric()) {
+        if table_name.chars().any(|c| !c.is_ascii_alphanumeric()) {
             panic!(
                 "table name must be alphanumeric, but {} was not",
                 table_name
