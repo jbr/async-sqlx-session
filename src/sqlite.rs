@@ -1,13 +1,10 @@
-use async_session::{async_trait, base64, log, serde_json, Session, SessionStore};
-use chrono::Utc;
+use async_session::{async_trait, chrono::Utc, log, serde_json, Result, Session, SessionStore};
 use sqlx::prelude::*;
-use sqlx::sqlite::SqlitePool;
+use sqlx::{pool::PoolConnection, sqlite::SqlitePool, SqliteConnection};
 
 #[derive(Clone, Debug)]
 pub struct SqliteStore {
     client: SqlitePool,
-    ttl: chrono::Duration,
-    prefix: Option<String>,
     table_name: String,
 }
 
@@ -16,12 +13,10 @@ impl SqliteStore {
         Self {
             client,
             table_name: "async_sessions".into(),
-            ttl: chrono::Duration::days(1),
-            prefix: None,
         }
     }
 
-    pub async fn new(database_url: &str) -> Result<Self, sqlx::Error> {
+    pub async fn new(database_url: &str) -> sqlx::Result<Self> {
         Ok(Self::from_client(SqlitePool::new(database_url).await?))
     }
 
@@ -35,15 +30,6 @@ impl SqliteStore {
 
         self.table_name = table_name;
         self
-    }
-
-    pub fn with_ttl(mut self, ttl: std::time::Duration) -> Self {
-        self.ttl = chrono::Duration::from_std(ttl).unwrap();
-        self
-    }
-
-    pub fn expiry(&self) -> i64 {
-        (Utc::now() + self.ttl).timestamp()
     }
 
     pub async fn migrate(&self) -> sqlx::Result<()> {
@@ -68,15 +54,13 @@ impl SqliteStore {
         query.replace("%%TABLE_NAME%%", &self.table_name)
     }
 
-    async fn connection(&self) -> sqlx::Result<sqlx::pool::PoolConnection<sqlx::SqliteConnection>> {
+    async fn connection(&self) -> sqlx::Result<PoolConnection<SqliteConnection>> {
         self.client.acquire().await
     }
 }
 
 #[async_trait]
 impl SessionStore for SqliteStore {
-    type Error = sqlx::Error;
-
     async fn load_session(&self, cookie_value: String) -> Option<Session> {
         let id = Session::id_from_cookie_value(&cookie_value).ok()?;
         let mut connection = self.connection().await.ok()?;
@@ -96,7 +80,7 @@ impl SessionStore for SqliteStore {
         serde_json::from_str(&session).ok()?
     }
 
-    async fn store_session(&self, mut session: Session) -> Option<String> {
+    async fn store_session(&self, session: Session) -> Option<String> {
         let id = session.id();
         let string = serde_json::to_string(&session).ok()?;
         let mut connection = self.connection().await.ok()?;
@@ -111,16 +95,16 @@ impl SessionStore for SqliteStore {
             "#,
         ))
         .bind(&id)
-        .bind(self.expiry())
+        .bind(&session.expiry().map(|expiry| expiry.timestamp()))
         .bind(&string)
         .execute(&mut connection)
         .await
         .unwrap();
 
-        session.take_cookie_value()
+        session.into_cookie_value()
     }
 
-    async fn destroy_session(&self, session: Session) -> Result<(), Self::Error> {
+    async fn destroy_session(&self, session: Session) -> Result {
         let id = session.id();
         let mut connection = self.connection().await?;
         sqlx::query(&self.substitute_table_name(
@@ -131,10 +115,11 @@ impl SessionStore for SqliteStore {
         .bind(&id)
         .execute(&mut connection)
         .await?;
+
         Ok(())
     }
 
-    async fn clear_store(&self) -> Result<(), Self::Error> {
+    async fn clear_store(&self) -> Result {
         let mut connection = self.connection().await?;
         sqlx::query(&self.substitute_table_name(
             r#"
@@ -143,35 +128,22 @@ impl SessionStore for SqliteStore {
         ))
         .execute(&mut connection)
         .await?;
+
+        Ok(())
+    }
+
+    async fn cleanup(&self) -> Result {
+        let mut connection = self.connection().await?;
+        sqlx::query(&self.substitute_table_name(
+            r#"
+            DELETE FROM %%TABLE_NAME%%
+            WHERE expires < ?
+            "#,
+        ))
+        .bind(Utc::now().timestamp())
+        .execute(&mut connection)
+        .await?;
+
         Ok(())
     }
 }
-
-#[derive(Debug)]
-pub enum Error {
-    SqlxError(sqlx::Error),
-    SerdeError(serde_json::Error),
-}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::SqlxError(e) => e.fmt(f),
-            Error::SerdeError(e) => e.fmt(f),
-        }
-    }
-}
-
-impl From<serde_json::Error> for Error {
-    fn from(e: serde_json::Error) -> Self {
-        Self::SerdeError(e)
-    }
-}
-
-impl From<sqlx::Error> for Error {
-    fn from(e: sqlx::Error) -> Self {
-        Self::SqlxError(e)
-    }
-}
-
-impl std::error::Error for Error {}
