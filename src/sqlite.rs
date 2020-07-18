@@ -29,6 +29,21 @@ pub struct SqliteStore {
 }
 
 impl SqliteStore {
+    /// constructs a new SqliteStore from an existing
+    /// sqlx::SqlitePool.  the default table name for this session
+    /// store will be "async_sessions". To override this, chain this
+    /// with [`with_table_name`](crate::SqliteStore::with_table_name).
+    ///
+    /// ```rust
+    /// # use async_sqlx_session::SqliteStore;
+    /// # use async_session::Result;
+    /// # fn main() -> Result { async_std::task::block_on(async {
+    /// let pool = sqlx::SqlitePool::new("sqlite:%3Amemory:").await.unwrap();
+    /// let store = SqliteStore::from_client(pool)
+    ///     .with_table_name("custom_table_name");
+    /// store.migrate().await;
+    /// # Ok(()) }) }
+    /// ```
     pub fn from_client(client: SqlitePool) -> Self {
         Self {
             client,
@@ -36,14 +51,47 @@ impl SqliteStore {
         }
     }
 
+    /// constructs a new SqliteStore from a sqlite: database url. the
+    /// default table name for this session store will be
+    /// "async_sessions". To override this, either chain with
+    /// [`with_table_name`](crate::SqliteStore::with_table_name) or
+    /// use
+    /// [`new_with_table_name`](crate::SqliteStore::new_with_table_name)
+    ///
+    /// ```rust
+    /// # use async_sqlx_session::SqliteStore;
+    /// # use async_session::Result;
+    /// # fn main() -> Result { async_std::task::block_on(async {
+    /// let store = SqliteStore::new("sqlite:%3Amemory:").await?
+    ///     .with_table_name("custom_table_name");
+    /// store.migrate().await;
+    /// # Ok(()) }) }
+    /// ```
     pub async fn new(database_url: &str) -> sqlx::Result<Self> {
         Ok(Self::from_client(SqlitePool::new(database_url).await?))
     }
 
+    /// constructs a new SqliteStore from a sqlite: database url. the
+    /// default table name for this session store will be
+    /// "async_sessions". To override this, either chain with
+    /// [`with_table_name`](crate::SqliteStore::with_table_name) or
+    /// use
+    /// [`new_with_table_name`](crate::SqliteStore::new_with_table_name)
+    ///
+    /// ```rust
+    /// # use async_sqlx_session::SqliteStore;
+    /// # use async_session::Result;
+    /// # fn main() -> Result { async_std::task::block_on(async {
+    /// let store = SqliteStore::new_with_table_name("sqlite:%3Amemory:", "custom_table_name").await?;
+    /// store.migrate().await;
+    /// # Ok(()) }) }
+    /// ```
     pub async fn new_with_table_name(database_url: &str, table_name: &str) -> sqlx::Result<Self> {
         Ok(Self::new(database_url).await?.with_table_name(table_name))
     }
 
+    /// Chainable method to add a custom table name. This will panic
+    /// if the table name is not `[a-zA-Z0-9_-]+`.
     pub fn with_table_name(mut self, table_name: impl AsRef<str>) -> Self {
         let table_name = table_name.as_ref();
         if table_name.is_empty()
@@ -61,6 +109,11 @@ impl SqliteStore {
         self
     }
 
+    /// Creates a session table if it does not already exist. If it
+    /// does, this will noop, making it safe to call repeatedly on
+    /// store initialization. In the future, this may make
+    /// exactly-once modifications to the schema of the session table
+    /// on breaking releases.
     pub async fn migrate(&self) -> sqlx::Result<()> {
         log::info!("migrating sessions on `{}`", self.table_name);
 
@@ -87,6 +140,8 @@ impl SqliteStore {
         self.client.acquire().await
     }
 
+    /// Spawns an async_std::task that clears out stale (expired)
+    /// sessions on a periodic basis.
     pub fn spawn_cleanup_task(&self, period: Duration) -> task::JoinHandle<()> {
         let store = self.clone();
         task::spawn(async move {
@@ -99,6 +154,8 @@ impl SqliteStore {
         })
     }
 
+    /// Performs a one-time cleanup task that clears out stale
+    /// (expired) sessions. You may want to call this from cron.
     pub async fn cleanup(&self) -> sqlx::Result<()> {
         let mut connection = self.connection().await?;
         sqlx::query(&self.substitute_table_name(
@@ -113,6 +170,14 @@ impl SqliteStore {
 
         Ok(())
     }
+
+    pub async fn count(&self) -> sqlx::Result<i32> {
+        let (count,) = sqlx::query_as("select count(*) from async_sessions")
+            .fetch_one(&mut self.connection().await?)
+            .await?;
+
+        Ok(count)
+    }
 }
 
 #[async_trait]
@@ -124,7 +189,7 @@ impl SessionStore for SqliteStore {
         let (session,): (String,) = sqlx::query_as(&self.substitute_table_name(
             r#"
             SELECT session FROM %%TABLE_NAME%%
-              WHERE id = ? AND (expires IS NULL || expires > ?)
+              WHERE id = ? AND (expires IS NULL OR expires > ?)
             "#,
         ))
         .bind(&id)
@@ -141,7 +206,7 @@ impl SessionStore for SqliteStore {
         let string = serde_json::to_string(&session).ok()?;
         let mut connection = self.connection().await.ok()?;
 
-        let result = sqlx::query(&self.substitute_table_name(
+        sqlx::query(&self.substitute_table_name(
             r#"
             INSERT INTO %%TABLE_NAME%%
               (id, session, expires) VALUES (?, ?, ?)
@@ -154,14 +219,10 @@ impl SessionStore for SqliteStore {
         .bind(&string)
         .bind(&session.expiry().map(|expiry| expiry.timestamp()))
         .execute(&mut connection)
-        .await;
+        .await
+        .ok()?;
 
-        if let Err(e) = result {
-            dbg!(e);
-            None
-        } else {
-            session.into_cookie_value()
-        }
+        session.into_cookie_value()
     }
 
     async fn destroy_session(&self, session: Session) -> Result {
@@ -188,6 +249,177 @@ impl SessionStore for SqliteStore {
         ))
         .execute(&mut connection)
         .await?;
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn test_store() -> SqliteStore {
+        let store = SqliteStore::new("sqlite:%3Amemory:")
+            .await
+            .expect("building a sqlite :memory: SqliteStore");
+        store
+            .migrate()
+            .await
+            .expect("migrating a brand new :memory: SqliteStore");
+        store
+    }
+
+    #[async_std::test]
+    async fn creating_a_new_session_with_no_expiry() -> Result {
+        let store = test_store().await;
+        let session = Session::new();
+        session.insert("key".into(), "value".into());
+        let cloned = session.clone();
+        let cookie_value = store.store_session(session).await.unwrap();
+
+        let (id, expires, serialized, count): (String, Option<i64>, String, i64) =
+            sqlx::query_as("select id, expires, session, count(*) from async_sessions")
+                .fetch_one(&mut store.connection().await?)
+                .await?;
+
+        assert_eq!(1, count);
+        assert_eq!(id, cloned.id());
+        assert_eq!(expires, None);
+
+        let deserialized_session: Session = serde_json::from_str(&serialized)?;
+        assert_eq!(cloned.id(), deserialized_session.id());
+        assert_eq!("value", deserialized_session.get("key").unwrap());
+
+        let loaded_session = store.load_session(cookie_value).await.unwrap();
+        assert_eq!(cloned.id(), loaded_session.id());
+        assert_eq!("value", loaded_session.get("key").unwrap());
+
+        assert!(!loaded_session.is_expired());
+        Ok(())
+    }
+
+    #[async_std::test]
+    async fn updating_a_session() -> Result {
+        let store = test_store().await;
+        let session = Session::new();
+        let original_id = session.id().to_owned();
+
+        session.insert("key".into(), "value".into());
+        let cookie_value = store.store_session(session).await.unwrap();
+
+        let session = store.load_session(cookie_value.clone()).await.unwrap();
+        session.insert("key".into(), "other value".into());
+        assert_eq!(None, store.store_session(session).await);
+
+        let session = store.load_session(cookie_value.clone()).await.unwrap();
+        assert_eq!(session.get("key").unwrap(), "other value");
+
+        let (id, count): (String, i64) = sqlx::query_as("select id, count(*) from async_sessions")
+            .fetch_one(&mut store.connection().await?)
+            .await?;
+
+        assert_eq!(1, count);
+        assert_eq!(original_id, id);
+
+        Ok(())
+    }
+
+    #[async_std::test]
+    async fn updating_a_session_extending_expiry() -> Result {
+        let store = test_store().await;
+        let mut session = Session::new();
+        session.expire_in(Duration::from_secs(10));
+        let original_id = session.id().to_owned();
+        let original_expires = session.expiry().unwrap().clone();
+        let cookie_value = store.store_session(session).await.unwrap();
+
+        let mut session = store.load_session(cookie_value.clone()).await.unwrap();
+        assert_eq!(session.expiry().unwrap(), &original_expires);
+        session.expire_in(Duration::from_secs(20));
+        let new_expires = session.expiry().unwrap().clone();
+        store.store_session(session).await;
+
+        let session = store.load_session(cookie_value.clone()).await.unwrap();
+        assert_eq!(session.expiry().unwrap(), &new_expires);
+
+        let (id, expires, count): (String, i64, i64) =
+            sqlx::query_as("select id, expires, count(*) from async_sessions")
+                .fetch_one(&mut store.connection().await?)
+                .await?;
+
+        assert_eq!(1, count);
+        assert_eq!(expires, new_expires.timestamp());
+        assert_eq!(original_id, id);
+
+        Ok(())
+    }
+
+    #[async_std::test]
+    async fn creating_a_new_session_with_expiry() -> Result {
+        let store = test_store().await;
+        let mut session = Session::new();
+        session.expire_in(Duration::from_secs(1));
+        session.insert("key".into(), "value".into());
+        let cloned = session.clone();
+
+        let cookie_value = store.store_session(session).await.unwrap();
+
+        let (id, expires, serialized, count): (String, Option<i64>, String, i64) =
+            sqlx::query_as("select id, expires, session, count(*) from async_sessions")
+                .fetch_one(&mut store.connection().await?)
+                .await?;
+
+        assert_eq!(1, count);
+        assert_eq!(id, cloned.id());
+        assert!(expires.unwrap() > Utc::now().timestamp());
+        dbg!(expires.unwrap() - Utc::now().timestamp());
+
+        let deserialized_session: Session = serde_json::from_str(&serialized)?;
+        assert_eq!(cloned.id(), deserialized_session.id());
+        assert_eq!("value", deserialized_session.get("key").unwrap());
+
+        let loaded_session = store.load_session(cookie_value.clone()).await.unwrap();
+        assert_eq!(cloned.id(), loaded_session.id());
+        assert_eq!("value", loaded_session.get("key").unwrap());
+
+        assert!(!loaded_session.is_expired());
+
+        task::sleep(Duration::from_secs(1)).await;
+        assert_eq!(None, store.load_session(cookie_value).await);
+
+        Ok(())
+    }
+
+    #[async_std::test]
+    async fn destroying_a_single_session() -> Result {
+        let store = test_store().await;
+        for _ in 0..3i8 {
+            store.store_session(Session::new()).await;
+        }
+
+        let cookie = store.store_session(Session::new()).await.unwrap();
+        dbg!("storing");
+        assert_eq!(4, store.count().await?);
+        let session = store.load_session(cookie.clone()).await.unwrap();
+        store.destroy_session(session.clone()).await.unwrap();
+        assert_eq!(None, store.load_session(cookie).await);
+        assert_eq!(3, store.count().await?);
+
+        // attempting to destroy the session again is not an error
+        assert!(store.destroy_session(session).await.is_ok());
+        Ok(())
+    }
+
+    #[async_std::test]
+    async fn clearing_the_whole_store() -> Result {
+        let store = test_store().await;
+        for _ in 0..3i8 {
+            store.store_session(Session::new()).await;
+        }
+
+        assert_eq!(3, store.count().await?);
+        store.clear_store().await.unwrap();
+        assert_eq!(0, store.count().await?);
 
         Ok(())
     }
