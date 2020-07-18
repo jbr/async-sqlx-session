@@ -8,18 +8,20 @@ use std::time::Duration;
 ///
 /// ```rust
 /// use async_sqlx_session::SqliteStore;
-/// use async_session::SessionStore;
+/// use async_session::{Session, SessionStore};
+/// use std::time::Duration;
+///
 /// # fn main() -> async_session::Result { async_std::task::block_on(async {
 /// let store = SqliteStore::new("sqlite:%3Amemory:").await?;
 /// store.migrate().await?;
-/// store.spawn_cleanup_task(std::time::Duration::from_secs(60 * 60));
+/// store.spawn_cleanup_task(Duration::from_secs(60 * 60));
 ///
-/// let mut session = async_session::Session::new();
+/// let session = Session::new();
 /// session.insert("key".into(), "value".into());
 ///
 /// let cookie_value = store.store_session(session).await.unwrap();
 /// let session = store.load_session(cookie_value).await.unwrap();
-/// assert_eq!(session.get("key"), Some("value".to_owned()));
+/// assert_eq!(session.get("key").unwrap(), "value");
 /// # Ok(()) }) }
 ///
 #[derive(Clone, Debug)]
@@ -51,9 +53,12 @@ impl SqliteStore {
         }
     }
 
-    /// constructs a new SqliteStore from a sqlite: database url. the
-    /// default table name for this session store will be
-    /// "async_sessions". To override this, either chain with
+    /// Constructs a new SqliteStore from a sqlite: database url. note
+    /// that this documentation uses the special `:memory:` sqlite
+    /// database for convenient testing, but a real application would
+    /// use a path like `sqlite:///path/to/database.db`. The default
+    /// table name for this session store will be "async_sessions". To
+    /// override this, either chain with
     /// [`with_table_name`](crate::SqliteStore::with_table_name) or
     /// use
     /// [`new_with_table_name`](crate::SqliteStore::new_with_table_name)
@@ -62,8 +67,7 @@ impl SqliteStore {
     /// # use async_sqlx_session::SqliteStore;
     /// # use async_session::Result;
     /// # fn main() -> Result { async_std::task::block_on(async {
-    /// let store = SqliteStore::new("sqlite:%3Amemory:").await?
-    ///     .with_table_name("custom_table_name");
+    /// let store = SqliteStore::new("sqlite:%3Amemory:").await?;
     /// store.migrate().await;
     /// # Ok(()) }) }
     /// ```
@@ -92,6 +96,24 @@ impl SqliteStore {
 
     /// Chainable method to add a custom table name. This will panic
     /// if the table name is not `[a-zA-Z0-9_-]+`.
+    /// ```rust
+    /// # use async_sqlx_session::SqliteStore;
+    /// # use async_session::Result;
+    /// # fn main() -> Result { async_std::task::block_on(async {
+    /// let store = SqliteStore::new("sqlite:%3Amemory:").await?
+    ///     .with_table_name("custom_name");
+    /// store.migrate().await;
+    /// # Ok(()) }) }
+    /// ```
+    ///
+    /// ```should_panic
+    /// # use async_sqlx_session::SqliteStore;
+    /// # use async_session::Result;
+    /// # fn main() -> Result { async_std::task::block_on(async {
+    /// let store = SqliteStore::new("sqlite:%3Amemory:").await?
+    ///     .with_table_name("johnny (); drop users;");
+    /// # Ok(()) }) }
+    /// ```
     pub fn with_table_name(mut self, table_name: impl AsRef<str>) -> Self {
         let table_name = table_name.as_ref();
         if table_name.is_empty()
@@ -114,6 +136,18 @@ impl SqliteStore {
     /// store initialization. In the future, this may make
     /// exactly-once modifications to the schema of the session table
     /// on breaking releases.
+    /// ```rust
+    /// # use async_sqlx_session::SqliteStore;
+    /// # use async_session::{Result, SessionStore, Session};
+    /// # fn main() -> Result { async_std::task::block_on(async {
+    /// let store = SqliteStore::new("sqlite:%3Amemory:").await?;
+    /// assert!(store.count().await.is_err());
+    /// store.migrate().await?;
+    /// store.store_session(Session::new()).await;
+    /// store.migrate().await?; // calling it a second time is safe
+    /// assert_eq!(store.count().await?, 1);
+    /// # Ok(()) }) }
+    /// ```
     pub async fn migrate(&self) -> sqlx::Result<()> {
         log::info!("migrating sessions on `{}`", self.table_name);
 
@@ -132,16 +166,35 @@ impl SqliteStore {
         Ok(())
     }
 
+    // private utility function because sqlite does not support
+    // parametrized table names
     fn substitute_table_name(&self, query: &str) -> String {
         query.replace("%%TABLE_NAME%%", &self.table_name)
     }
 
+    /// retrieve a connection from the pool
     async fn connection(&self) -> sqlx::Result<PoolConnection<SqliteConnection>> {
         self.client.acquire().await
     }
 
     /// Spawns an async_std::task that clears out stale (expired)
     /// sessions on a periodic basis.
+    /// ```rust
+    /// # use async_sqlx_session::SqliteStore;
+    /// # use async_session::{Result, SessionStore, Session};
+    /// # use std::time::Duration;
+    /// # fn main() -> Result { async_std::task::block_on(async {
+    /// let store = SqliteStore::new("sqlite:%3Amemory:").await?;
+    /// store.migrate().await?;
+    /// store.spawn_cleanup_task(Duration::from_secs(1));
+    /// let mut session = Session::new();
+    /// session.expire_in(Duration::from_secs(0));
+    /// store.store_session(session).await;
+    /// assert_eq!(store.count().await?, 1);
+    /// async_std::task::sleep(Duration::from_secs(2)).await;
+    /// assert_eq!(store.count().await?, 0);
+    /// # Ok(()) }) }
+    /// ```
     pub fn spawn_cleanup_task(&self, period: Duration) -> task::JoinHandle<()> {
         let store = self.clone();
         task::spawn(async move {
@@ -156,6 +209,20 @@ impl SqliteStore {
 
     /// Performs a one-time cleanup task that clears out stale
     /// (expired) sessions. You may want to call this from cron.
+    /// ```rust
+    /// # use async_sqlx_session::SqliteStore;
+    /// # use async_session::{chrono::{Utc,Duration}, Result, SessionStore, Session};
+    /// # fn main() -> Result { async_std::task::block_on(async {
+    /// let store = SqliteStore::new("sqlite:%3Amemory:").await?;
+    /// store.migrate().await?;
+    /// let mut session = Session::new();
+    /// session.set_expiry(Utc::now() - Duration::seconds(5));
+    /// store.store_session(session).await;
+    /// assert_eq!(store.count().await?, 1);
+    /// store.cleanup().await?;
+    /// assert_eq!(store.count().await?, 0);
+    /// # Ok(()) }) }
+    /// ```
     pub async fn cleanup(&self) -> sqlx::Result<()> {
         let mut connection = self.connection().await?;
         sqlx::query(&self.substitute_table_name(
@@ -171,10 +238,27 @@ impl SqliteStore {
         Ok(())
     }
 
+    /// retrieves the number of sessions currently stored, including
+    /// expired sessions
+    ///
+    /// ```rust
+    /// # use async_sqlx_session::SqliteStore;
+    /// # use async_session::{Result, SessionStore, Session};
+    /// # use std::time::Duration;
+    /// # fn main() -> Result { async_std::task::block_on(async {
+    /// let store = SqliteStore::new("sqlite:%3Amemory:").await?;
+    /// store.migrate().await?;
+    /// assert_eq!(store.count().await?, 0);
+    /// store.store_session(Session::new()).await;
+    /// assert_eq!(store.count().await?, 1);
+    /// # Ok(()) }) }
+    /// ```
+
     pub async fn count(&self) -> sqlx::Result<i32> {
-        let (count,) = sqlx::query_as("select count(*) from async_sessions")
-            .fetch_one(&mut self.connection().await?)
-            .await?;
+        let (count,) =
+            sqlx::query_as(&self.substitute_table_name("SELECT COUNT(*) FROM %%TABLE_NAME%%"))
+                .fetch_one(&mut self.connection().await?)
+                .await?;
 
         Ok(count)
     }
