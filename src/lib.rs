@@ -5,7 +5,7 @@
 //! through a feature flag.
 //!
 //! For now, see the documentation for
-//! [`SqliteStore`](crate::SqliteStore)
+//! [`SqliteStore`](crate::SqliteSessionStore)
 #![forbid(unsafe_code, future_incompatible)]
 #![deny(
     missing_debug_implementations,
@@ -19,4 +19,4 @@
 #[cfg(feature = "sqlite")]
 mod sqlite;
 #[cfg(feature = "sqlite")]
-pub use sqlite::SqliteStore;
+pub use sqlite::SqliteSessionStore;
