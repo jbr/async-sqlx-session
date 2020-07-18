@@ -1,6 +1,9 @@
 # async-sqlx-session
 ## [sqlx](https://github.com/launchbadge/sqlx)-backed session store for [async-session](https://github.com/http-rs/async-session)
 
+## ⚠️ Note: This crate is not yet published, so nothing in this readme will actually work yet ⚠️
+check out the status of https://github.com/http-rs/async-session/pull/2 for the latest
+
 [![crates.io version](https://img.shields.io/crates/v/async-sqlx-session.svg?style=flat-square)](https://lib.rs/async-sqlx-session)
 [![docs.rs docs](https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square)](https://docs.rs/async-sqlx-session)
 
