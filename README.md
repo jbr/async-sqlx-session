@@ -4,12 +4,16 @@
 ## ⚠️ Note: This crate is not yet published, so nothing in this readme will actually work yet ⚠️
 check out the status of https://github.com/http-rs/async-session/pull/2 for the latest
 
-[![crates.io version](https://img.shields.io/crates/v/async-sqlx-session.svg?style=flat-square)](https://lib.rs/async-sqlx-session)
-[![docs.rs docs](https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square)](https://docs.rs/async-sqlx-session)
+* [API Docs][docs] [![docs.rs docs][docs-badge]][docs]
+* [Releases][releases] [![crates.io version][version-badge]][lib-rs]
+* [Contributing][contributing]
 
-* [API Docs](https://docs.rs/async-sqlx-session)
-* [Releases](https://github.com/jbr/async-sqlx-session/releases)
-* [Contributing](https://github.com/jbr/async-sqlx-session/blob/master/.github/CONTRIBUTING.md)
+[releases] https://github.com/jbr/async-sqlx-session/releases
+[docs] https://docs.rs/async-sqlx-session
+[contributing] https://github.com/jbr/async-sqlx-session/blob/master/.github/CONTRIBUTING.md
+[lib-rs] https://lib.rs/async-sqlx-session
+[docs-badge] https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square
+[version-badge] https://img.shields.io/crates/v/async-sqlx-session.svg?style=flat-square
 
 ## Installation
 ```sh
