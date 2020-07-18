@@ -186,6 +186,7 @@ impl SqliteSessionStore {
     /// # fn main() -> Result { async_std::task::block_on(async {
     /// let store = SqliteSessionStore::new("sqlite:%3Amemory:").await?;
     /// store.migrate().await?;
+    /// # let join_handle =
     /// store.spawn_cleanup_task(Duration::from_secs(1));
     /// let mut session = Session::new();
     /// session.expire_in(Duration::from_secs(0));
@@ -193,6 +194,7 @@ impl SqliteSessionStore {
     /// assert_eq!(store.count().await?, 1);
     /// async_std::task::sleep(Duration::from_secs(2)).await;
     /// assert_eq!(store.count().await?, 0);
+    /// # join_handle.cancel().await;
     /// # Ok(()) }) }
     /// ```
     pub fn spawn_cleanup_task(&self, period: Duration) -> task::JoinHandle<()> {
