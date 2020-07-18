@@ -41,7 +41,7 @@ impl SqliteStore {
     }
 
     pub async fn new_with_table_name(database_url: &str, table_name: &str) -> sqlx::Result<Self> {
-        Ok(Self::from_client(SqlitePool::new(database_url).await?).with_table_name(table_name))
+        Ok(Self::new(database_url).await?.with_table_name(table_name))
     }
 
     pub fn with_table_name(mut self, table_name: impl AsRef<str>) -> Self {
