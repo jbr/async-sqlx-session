@@ -17,11 +17,11 @@ use std::time::Duration;
 /// store.spawn_cleanup_task(Duration::from_secs(60 * 60));
 ///
 /// let session = Session::new();
-/// session.insert("key".into(), "value".into());
+/// session.insert("key", vec![1,2,3]);
 ///
 /// let cookie_value = store.store_session(session).await.unwrap();
 /// let session = store.load_session(cookie_value).await.unwrap();
-/// assert_eq!(session.get("key").unwrap(), "value");
+/// assert_eq!(session.get::<Vec<i8>>("key").unwrap(), vec![1,2,3]);
 /// # Ok(()) }) }
 ///
 #[derive(Clone, Debug)]
@@ -179,7 +179,7 @@ impl SqliteSessionStore {
 
     /// Spawns an async_std::task that clears out stale (expired)
     /// sessions on a periodic basis.
-    /// ```rust
+    /// ```rust,no_run
     /// # use async_sqlx_session::SqliteSessionStore;
     /// # use async_session::{Result, SessionStore, Session};
     /// # use std::time::Duration;
@@ -359,7 +359,7 @@ mod tests {
     async fn creating_a_new_session_with_no_expiry() -> Result {
         let store = test_store().await;
         let session = Session::new();
-        session.insert("key".into(), "value".into());
+        session.insert("key", "value")?;
         let cloned = session.clone();
         let cookie_value = store.store_session(session).await.unwrap();
 
@@ -374,11 +374,11 @@ mod tests {
 
         let deserialized_session: Session = serde_json::from_str(&serialized)?;
         assert_eq!(cloned.id(), deserialized_session.id());
-        assert_eq!("value", deserialized_session.get("key").unwrap());
+        assert_eq!("value", &deserialized_session.get::<String>("key").unwrap());
 
         let loaded_session = store.load_session(cookie_value).await.unwrap();
         assert_eq!(cloned.id(), loaded_session.id());
-        assert_eq!("value", loaded_session.get("key").unwrap());
+        assert_eq!("value", &loaded_session.get::<String>("key").unwrap());
 
         assert!(!loaded_session.is_expired());
         Ok(())
@@ -390,15 +390,15 @@ mod tests {
         let session = Session::new();
         let original_id = session.id().to_owned();
 
-        session.insert("key".into(), "value".into());
+        session.insert("key", "value")?;
         let cookie_value = store.store_session(session).await.unwrap();
 
         let session = store.load_session(cookie_value.clone()).await.unwrap();
-        session.insert("key".into(), "other value".into());
+        session.insert("key", "other value")?;
         assert_eq!(None, store.store_session(session).await);
 
         let session = store.load_session(cookie_value.clone()).await.unwrap();
-        assert_eq!(session.get("key").unwrap(), "other value");
+        assert_eq!(session.get::<String>("key").unwrap(), "other value");
 
         let (id, count): (String, i64) = sqlx::query_as("select id, count(*) from async_sessions")
             .fetch_one(&mut store.connection().await?)
@@ -445,7 +445,7 @@ mod tests {
         let store = test_store().await;
         let mut session = Session::new();
         session.expire_in(Duration::from_secs(1));
-        session.insert("key".into(), "value".into());
+        session.insert("key", "value")?;
         let cloned = session.clone();
 
         let cookie_value = store.store_session(session).await.unwrap();
@@ -462,11 +462,11 @@ mod tests {
 
         let deserialized_session: Session = serde_json::from_str(&serialized)?;
         assert_eq!(cloned.id(), deserialized_session.id());
-        assert_eq!("value", deserialized_session.get("key").unwrap());
+        assert_eq!("value", &deserialized_session.get::<String>("key").unwrap());
 
         let loaded_session = store.load_session(cookie_value.clone()).await.unwrap();
         assert_eq!(cloned.id(), loaded_session.id());
-        assert_eq!("value", loaded_session.get("key").unwrap());
+        assert_eq!("value", &loaded_session.get::<String>("key").unwrap());
 
         assert!(!loaded_session.is_expired());
 
