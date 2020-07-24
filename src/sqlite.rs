@@ -16,7 +16,7 @@ use std::time::Duration;
 /// store.migrate().await?;
 /// store.spawn_cleanup_task(Duration::from_secs(60 * 60));
 ///
-/// let session = Session::new();
+/// let mut session = Session::new();
 /// session.insert("key", vec![1,2,3]);
 ///
 /// let cookie_value = store.store_session(session).await.unwrap();
@@ -358,7 +358,7 @@ mod tests {
     #[async_std::test]
     async fn creating_a_new_session_with_no_expiry() -> Result {
         let store = test_store().await;
-        let session = Session::new();
+        let mut session = Session::new();
         session.insert("key", "value")?;
         let cloned = session.clone();
         let cookie_value = store.store_session(session).await.unwrap();
@@ -387,13 +387,13 @@ mod tests {
     #[async_std::test]
     async fn updating_a_session() -> Result {
         let store = test_store().await;
-        let session = Session::new();
+        let mut session = Session::new();
         let original_id = session.id().to_owned();
 
         session.insert("key", "value")?;
         let cookie_value = store.store_session(session).await.unwrap();
 
-        let session = store.load_session(cookie_value.clone()).await.unwrap();
+        let mut session = store.load_session(cookie_value.clone()).await.unwrap();
         session.insert("key", "other value")?;
         assert_eq!(None, store.store_session(session).await);
 
