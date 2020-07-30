@@ -3,7 +3,7 @@ use async_std::task;
 use sqlx::{pool::PoolConnection, prelude::PgQueryAs, Executor, PgConnection, PgPool};
 use std::time::Duration;
 
-/// sqlx sqlite session store for async-sessions
+/// sqlx postgres session store for async-sessions
 ///
 /// ```rust
 /// use async_sqlx_session::PostgresSessionStore;
@@ -32,7 +32,7 @@ pub struct PostgresSessionStore {
 
 impl PostgresSessionStore {
     /// constructs a new PostgresSessionStore from an existing
-    /// sqlx::PostgresPool.  the default table name for this session
+    /// sqlx::PgPool.  the default table name for this session
     /// store will be "async_sessions". To override this, chain this
     /// with [`with_table_name`](crate::PostgresSessionStore::with_table_name).
     ///
@@ -53,14 +53,11 @@ impl PostgresSessionStore {
         }
     }
 
-    /// Constructs a new PostgresSessionStore from a sqlite: database url. note
-    /// that this documentation uses the special `:memory:` sqlite
-    /// database for convenient testing, but a real application would
-    /// use a path like `sqlite:///path/to/database.db`. The default
-    /// table name for this session store will be "async_sessions". To
-    /// override this, either chain with
-    /// [`with_table_name`](crate::PostgresSessionStore::with_table_name) or
-    /// use
+    /// Constructs a new PostgresSessionStore from a postgres://
+    /// database url. The default table name for this session store
+    /// will be "async_sessions". To override this, either chain with
+    /// [`with_table_name`](crate::PostgresSessionStore::with_table_name)
+    /// or use
     /// [`new_with_table_name`](crate::PostgresSessionStore::new_with_table_name)
     ///
     /// ```rust
@@ -76,7 +73,7 @@ impl PostgresSessionStore {
         Ok(Self::from_client(pool))
     }
 
-    /// constructs a new PostgresSessionStore from a sqlite: database url. the
+    /// constructs a new PostgresSessionStore from a postgres:// url. the
     /// default table name for this session store will be
     /// "async_sessions". To override this, either chain with
     /// [`with_table_name`](crate::PostgresSessionStore::with_table_name) or
@@ -167,8 +164,6 @@ impl PostgresSessionStore {
         Ok(())
     }
 
-    // private utility function because sqlite does not support
-    // parametrized table names
     fn substitute_table_name(&self, query: &str) -> String {
         query.replace("%%TABLE_NAME%%", &self.table_name)
     }
