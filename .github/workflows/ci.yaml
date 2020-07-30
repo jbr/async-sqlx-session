@@ -4,22 +4,37 @@ on:
   pull_request:
   push:
     branches:
-      - master
+      - main
 
 env:
   RUSTFLAGS: -Dwarnings
+  POSTGRES_DB: async_sqlx_session_tests
+  PG_TEST_DB_URL: postgres://postgres:postgres@localhost/async_sqlx_session_tests
 
 jobs:
   build_and_test:
     name: Build and test
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macOS-latest]
         rust: [stable, nightly]
 
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: async_sqlx_session_tests
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@main
 
     - name: Install ${{ matrix.rust }}
       uses: actions-rs/toolchain@v1
@@ -44,13 +59,13 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --all
+        args: --all --all-features -- --test-threads=1
 
   check_fmt_and_docs:
     name: Checking fmt, clippy, and docs
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@main
 
     - uses: actions-rs/toolchain@v1
       with:

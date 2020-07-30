@@ -20,3 +20,8 @@
 mod sqlite;
 #[cfg(feature = "sqlite")]
 pub use sqlite::SqliteSessionStore;
+
+#[cfg(feature = "pg")]
+mod pg;
+#[cfg(feature = "pg")]
+pub use pg::PostgresSessionStore;
