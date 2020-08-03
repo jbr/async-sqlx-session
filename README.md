@@ -16,9 +16,21 @@
 [version-badge]: https://img.shields.io/crates/v/async-sqlx-session.svg?style=flat-square
 
 ## Installation
-```sh
-$ cargo add async-sqlx-session
+### sqlite: 
+
+```toml
+async-sqlx-session = { version = "0.2.0", features = ["sqlite"] }
 ```
+
+### postgres: 
+
+```toml
+async-sqlx-session = { version = "0.2.0", features = ["pg"] }
+```
+
+
+
+## Cargo Features:
 
 ## Safety
 This crate uses ``#![deny(unsafe_code)]`` to ensure everything is implemented in

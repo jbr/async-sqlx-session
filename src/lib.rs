@@ -1,11 +1,8 @@
 //! # async-sqlx-session
 //!
-//! This crate currently only provides a sqlite session store, but
-//! will eventually support other databases as well, configurable
-//! through a feature flag.
-//!
-//! For now, see the documentation for
-//! [`SqliteStore`](crate::SqliteSessionStore)
+//! This crate currently provides two session stores: [`PostgresSessionStore`] and [`SqliteSessionStore`], each of which is enabled by a feature flag.
+//! To use `SqliteSessionStore`, enable the `sqlite` feature on this crate.
+//! To use `PostgresSessionStore`, enable the `pg` feature on this crate.
 #![forbid(unsafe_code, future_incompatible)]
 #![deny(
     missing_debug_implementations,
