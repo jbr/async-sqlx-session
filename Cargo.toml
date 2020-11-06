@@ -11,6 +11,8 @@ license = "MIT OR Apache-2.0"
 keywords = ["sessions", "tide", "async-session", "sqlx", "sqlite"]
 categories = ["web-programming::http-server", "web-programming", "database"]
 
+[package.metadata.docs.rs]
+features = ["pg", "sqlite"]
 
 [features]
 default = []
