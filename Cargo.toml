@@ -14,7 +14,7 @@ categories = ["web-programming::http-server", "web-programming", "database"]
 [package.metadata.docs.rs]
 features = ["pg", "sqlite"]
 
-[features] 
+[features]
 default = ["native-tls"]
 sqlite = ["sqlx/sqlite"]
 pg = ["sqlx/postgres", "sqlx/json"]
