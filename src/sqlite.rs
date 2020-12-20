@@ -39,7 +39,7 @@ impl SqliteSessionStore {
     /// # use async_sqlx_session::SqliteSessionStore;
     /// # use async_session::Result;
     /// # fn main() -> Result { async_std::task::block_on(async {
-    /// let pool = sqlx::SqlitePool::new("sqlite:%3Amemory:").await.unwrap();
+    /// let pool = sqlx::SqlitePool::connect("sqlite:%3Amemory:").await.unwrap();
     /// let store = SqliteSessionStore::from_client(pool)
     ///     .with_table_name("custom_table_name");
     /// store.migrate().await;
