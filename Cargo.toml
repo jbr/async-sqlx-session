@@ -21,7 +21,7 @@ pg = ["sqlx/postgres", "sqlx/json"]
 
 [dependencies]
 async-session = "2.0.1"
-sqlx = { version = "0.3.5", features = ["chrono"] }
+sqlx = { version = "0.4.2", features = ["chrono"] }
 async-std = "1.7.0"
 
 
