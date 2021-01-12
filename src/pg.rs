@@ -1,6 +1,6 @@
 use async_session::{async_trait, chrono::Utc, log, serde_json, Result, Session, SessionStore};
 use async_std::task;
-use sqlx::{pool::PoolConnection, prelude::PgQueryAs, Executor, PgConnection, PgPool};
+use sqlx::{Postgres, pool::PoolConnection, Executor, PgConnection, PgPool}; 
 use std::time::Duration;
 
 /// sqlx postgres session store for async-sessions
@@ -64,12 +64,12 @@ impl PostgresSessionStore {
     /// # use async_sqlx_session::PostgresSessionStore;
     /// # use async_session::Result;
     /// # fn main() -> Result { async_std::task::block_on(async {
-    /// let store = PostgresSessionStore::new(&std::env::var("PG_TEST_DB_URL").unwrap()).await?;
+    /// let store = PostgresSessionStore::connect(&std::env::var("PG_TEST_DB_URL").unwrap()).await?;
     /// store.migrate().await;
     /// # Ok(()) }) }
     /// ```
     pub async fn new(database_url: &str) -> sqlx::Result<Self> {
-        let pool = PgPool::new(database_url).await?;
+        let pool = PgPool::connect(database_url).await?;
         Ok(Self::from_client(pool))
     }
 
@@ -169,7 +169,7 @@ impl PostgresSessionStore {
     }
 
     /// retrieve a connection from the pool
-    async fn connection(&self) -> sqlx::Result<PoolConnection<PgConnection>> {
+    async fn connection(&self) -> sqlx::Result<PoolConnection<Postgres>> {
         self.client.acquire().await
     }
 
