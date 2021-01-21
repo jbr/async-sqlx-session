@@ -40,7 +40,7 @@ impl PostgresSessionStore {
     /// # use async_sqlx_session::PostgresSessionStore;
     /// # use async_session::Result;
     /// # fn main() -> Result { async_std::task::block_on(async {
-    /// let pool = sqlx::PgPool::new(&std::env::var("PG_TEST_DB_URL").unwrap()).await.unwrap();
+    /// let pool = sqlx::PgPool::connect(&std::env::var("PG_TEST_DB_URL").unwrap()).await.unwrap();
     /// let store = PostgresSessionStore::from_client(pool)
     ///     .with_table_name("custom_table_name");
     /// store.migrate().await;
