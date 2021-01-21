@@ -1,6 +1,6 @@
 use async_session::{async_trait, chrono::Utc, log, serde_json, Result, Session, SessionStore};
 use async_std::task;
-use sqlx::{Sqlite, pool::PoolConnection, sqlite::SqlitePool};
+use sqlx::{pool::PoolConnection, sqlite::SqlitePool, Sqlite};
 use std::time::Duration;
 
 /// sqlx sqlite session store for async-sessions

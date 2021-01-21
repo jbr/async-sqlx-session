@@ -1,6 +1,6 @@
 use async_session::{async_trait, chrono::Utc, log, serde_json, Result, Session, SessionStore};
 use async_std::task;
-use sqlx::{Executor, PgPool, Postgres, pool::PoolConnection};
+use sqlx::{pool::PoolConnection, Executor, PgPool, Postgres};
 use std::time::Duration;
 
 /// sqlx postgres session store for async-sessions
