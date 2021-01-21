@@ -1,6 +1,7 @@
 use async_session::{async_trait, chrono::Utc, log, serde_json, Result, Session, SessionStore};
 use async_std::task;
-use sqlx::{pool::PoolConnection, prelude::PgQueryAs, Executor, PgConnection, PgPool};
+use sqlx::pool::PoolConnection;
+use sqlx::postgres::PgPool;
 use std::time::Duration;
 
 /// sqlx postgres session store for async-sessions
@@ -69,7 +70,7 @@ impl PostgresSessionStore {
     /// # Ok(()) }) }
     /// ```
     pub async fn new(database_url: &str) -> sqlx::Result<Self> {
-        let pool = PgPool::new(database_url).await?;
+        let pool = PgPool::connect(database_url).await?;
         Ok(Self::from_client(pool))
     }
 
@@ -150,16 +151,14 @@ impl PostgresSessionStore {
         log::info!("migrating sessions on `{}`", self.table_name);
 
         let mut conn = self.client.acquire().await?;
-        conn.execute(&*self.substitute_table_name(
+        sqlx::query(&*self.substitute_table_name(
             r#"
             CREATE TABLE IF NOT EXISTS %%TABLE_NAME%% (
                 "id" VARCHAR NOT NULL PRIMARY KEY,
                 "expires" TIMESTAMP WITH TIME ZONE NULL,
                 "session" TEXT NOT NULL
             )
-            "#,
-        ))
-        .await?;
+            "#)).execute(&mut conn).await?;
 
         Ok(())
     }
@@ -169,7 +168,7 @@ impl PostgresSessionStore {
     }
 
     /// retrieve a connection from the pool
-    async fn connection(&self) -> sqlx::Result<PoolConnection<PgConnection>> {
+    async fn connection(&self) -> sqlx::Result<PoolConnection<sqlx::Postgres>> {
         self.client.acquire().await
     }
 

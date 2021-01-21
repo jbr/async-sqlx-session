@@ -1,6 +1,7 @@
 use async_session::{async_trait, chrono::Utc, log, serde_json, Result, Session, SessionStore};
 use async_std::task;
-use sqlx::{pool::PoolConnection, prelude::SqliteQueryAs, sqlite::SqlitePool, SqliteConnection};
+use sqlx::pool::PoolConnection;
+use sqlx::sqlite::SqlitePool;
 use std::time::Duration;
 
 /// sqlx sqlite session store for async-sessions
@@ -71,7 +72,7 @@ impl SqliteSessionStore {
     /// # Ok(()) }) }
     /// ```
     pub async fn new(database_url: &str) -> sqlx::Result<Self> {
-        Ok(Self::from_client(SqlitePool::new(database_url).await?))
+        Ok(Self::from_client(SqlitePool::connect(database_url).await?))
     }
 
     /// constructs a new SqliteSessionStore from a sqlite: database url. the
@@ -172,7 +173,7 @@ impl SqliteSessionStore {
     }
 
     /// retrieve a connection from the pool
-    async fn connection(&self) -> sqlx::Result<PoolConnection<SqliteConnection>> {
+    async fn connection(&self) -> sqlx::Result<PoolConnection<sqlx::Sqlite>> {
         self.client.acquire().await
     }
 
