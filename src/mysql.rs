@@ -40,7 +40,7 @@ impl MySqlSessionStore {
     /// # use async_sqlx_session::MySqlSessionStore;
     /// # use async_session::Result;
     /// # fn main() -> Result { async_std::task::block_on(async {
-    /// let pool = sqlx::PgPool::new(&std::env::var("MYSQL_TEST_DB_URL").unwrap()).await.unwrap();
+    /// let pool = sqlx::PgPool::connect(&std::env::var("MYSQL_TEST_DB_URL").unwrap()).await.unwrap();
     /// let store = MySqlSessionStore::from_client(pool)
     ///     .with_table_name("custom_table_name");
     /// store.migrate().await;
