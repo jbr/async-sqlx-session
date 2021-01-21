@@ -22,3 +22,8 @@ pub use sqlite::SqliteSessionStore;
 mod pg;
 #[cfg(feature = "pg")]
 pub use pg::PostgresSessionStore;
+
+#[cfg(feature = "mysql")]
+mod mysql;
+#[cfg(feature = "mysql")]
+pub use mysql::MySqlSessionStore;
