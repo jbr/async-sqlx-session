@@ -23,8 +23,8 @@ rustls = ["sqlx/runtime-async-std-rustls"]
 
 [dependencies]
 async-session = "2.0.1"
-sqlx = { version = "0.4.1", features = ["chrono"] }
-async-std = "1.8.0"
+sqlx = { version = "0.4.2", features = ["chrono"] }
+async-std = "1.9.0"
 
 [dev-dependencies]
-async-std = { version = "1.8.0", features = ["attributes"] }
+async-std = { version = "1.9.0", features = ["attributes"] }
