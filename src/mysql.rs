@@ -1,7 +1,5 @@
 use async_session::{async_trait, chrono::Utc, log, serde_json, Result, Session, SessionStore};
-use async_std::task;
 use sqlx::{pool::PoolConnection, Executor, MySql, MySqlPool};
-use std::time::Duration;
 
 /// sqlx mysql session store for async-sessions
 ///
@@ -14,6 +12,7 @@ use std::time::Duration;
 /// let store = MySqlSessionStore::new(&std::env::var("MYSQL_TEST_DB_URL").unwrap()).await?;
 /// store.migrate().await?;
 /// # store.clear_store().await?;
+/// # #[cfg(feature = "async_std")]
 /// store.spawn_cleanup_task(Duration::from_secs(60 * 60));
 ///
 /// let mut session = Session::new();
@@ -178,7 +177,9 @@ impl MySqlSessionStore {
     }
 
     /// Spawns an async_std::task that clears out stale (expired)
-    /// sessions on a periodic basis.
+    /// sessions on a periodic basis. Only available with the
+    /// async_std feature enabled.
+    ///
     /// ```rust,no_run
     /// # use async_sqlx_session::MySqlSessionStore;
     /// # use async_session::{Result, SessionStore, Session};
@@ -197,7 +198,8 @@ impl MySqlSessionStore {
     /// # join_handle.cancel().await;
     /// # Ok(()) }) }
     /// ```
-    pub fn spawn_cleanup_task(&self, period: Duration) -> task::JoinHandle<()> {
+    #[cfg(feature = "async_std")]
+    pub fn spawn_cleanup_task(&self, period: std::time::Duration) -> task::JoinHandle<()> {
         let store = self.clone();
         task::spawn(async move {
             loop {
@@ -228,7 +230,7 @@ impl MySqlSessionStore {
     /// ```
     pub async fn cleanup(&self) -> sqlx::Result<()> {
         let mut connection = self.connection().await?;
-        sqlx::query(&self.substitute_table_name("DELETE FROM %%TABLE_NAME%% WHERE expires < $1"))
+        sqlx::query(&self.substitute_table_name("DELETE FROM %%TABLE_NAME%% WHERE expires < ?"))
             .bind(Utc::now())
             .execute(&mut connection)
             .await?;
@@ -330,6 +332,7 @@ impl SessionStore for MySqlSessionStore {
 mod tests {
     use super::*;
     use async_session::chrono::DateTime;
+    use std::time::Duration;
 
     async fn test_store() -> MySqlSessionStore {
         let store = MySqlSessionStore::new(&std::env::var("MYSQL_TEST_DB_URL").unwrap())
@@ -462,7 +465,7 @@ mod tests {
 
         assert!(!loaded_session.is_expired());
 
-        task::sleep(Duration::from_secs(1)).await;
+        async_std::task::sleep(Duration::from_secs(1)).await;
         assert_eq!(None, store.load_session(cookie_value).await?);
 
         Ok(())
