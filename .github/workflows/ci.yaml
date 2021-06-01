@@ -11,7 +11,7 @@ env:
   POSTGRES_DB: async_sqlx_session_tests
   PG_TEST_DB_URL: postgres://postgres:postgres@localhost/async_sqlx_session_tests
   MYSQL_DB: async_sqlx_session_tests
-  MYSQL_TEST_DB_URL: mysql://root@localhost/async_sqlx_session_tests
+  MYSQL_TEST_DB_URL: mysql://root:root@localhost/async_sqlx_session_tests
 
 jobs:
   build_and_test:
