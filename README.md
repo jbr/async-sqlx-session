@@ -19,19 +19,19 @@
 ### sqlite: 
 
 ```toml
-async-sqlx-session = { version = "0.3.0", features = ["sqlite"] }
+async-sqlx-session = { version = "0.4.0", features = ["sqlite"] }
 ```
 
 ### postgres: 
 
 ```toml
-async-sqlx-session = { version = "0.3.0", features = ["pg"] }
+async-sqlx-session = { version = "0.4.0", features = ["pg"] }
 ```
 
 ### mysql: 
 
 ```toml
-async-sqlx-session = { version = "0.3.0", features = ["mysql"] }
+async-sqlx-session = { version = "0.4.0", features = ["mysql"] }
 ```
 
 ### Optional `async_std` feature
@@ -41,9 +41,8 @@ enable the `async_std` feature, which can be combined with any of the
 above datastores.
 
 ```toml
-async-sqlx-session = { version = "0.3.0", features = ["pg", "async_std"] }
+async-sqlx-session = { version = "0.4.0", features = ["pg", "async_std"] }
 ```
-
 
 ## Cargo Features:
 
