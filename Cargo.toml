@@ -8,11 +8,19 @@ readme = "README.md"
 repository = "https://github.com/jbr/async-sqlx-session"
 documentation = "https://docs.rs/async-sqlx-session"
 license = "MIT OR Apache-2.0"
-keywords = ["sessions", "tide", "async-session", "sqlx", "sqlite"]
+keywords = [
+  "sessions",
+  "tide",
+  "async-session",
+  "sqlx",
+  "sqlite",
+  "postgres",
+  "mysql"
+]
 categories = ["web-programming::http-server", "web-programming", "database"]
 
 [package.metadata.docs.rs]
-features = ["pg", "sqlite", "async_std"]
+features = ["pg", "sqlite", "mysql", "async_std"]
 
 [features]
 default = ["native-tls"]
@@ -21,6 +29,7 @@ pg = ["sqlx/postgres", "sqlx/json"]
 native-tls = ["sqlx/runtime-async-std-native-tls"]
 rustls = ["sqlx/runtime-async-std-rustls"]
 async_std = ["async-std"]
+mysql = ["sqlx/mysql", "sqlx/json"]
 
 [dependencies]
 async-session = "3.0.0"
@@ -29,3 +38,7 @@ async-std = { version = "1.9.0", optional = true }
 
 [dev-dependencies]
 async-std = { version = "1.9.0", features = ["attributes"] }
+
+[dev-dependencies.sqlx]
+version = "0.5.5"
+features = ["chrono", "runtime-async-std-native-tls"]

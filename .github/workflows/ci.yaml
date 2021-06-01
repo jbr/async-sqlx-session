@@ -10,6 +10,8 @@ env:
   RUSTFLAGS: -Dwarnings
   POSTGRES_DB: async_sqlx_session_tests
   PG_TEST_DB_URL: postgres://postgres:postgres@localhost/async_sqlx_session_tests
+  MYSQL_DB: async_sqlx_session_tests
+  MYSQL_TEST_DB_URL: mysql://root:root@localhost/async_sqlx_session_tests
 
 jobs:
   build_and_test:
@@ -33,6 +35,19 @@ jobs:
         ports:
           - 5432:5432
 
+      mysql:
+        image: mysql
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: async_sqlx_session_tests
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 3
+
     steps:
     - uses: actions/checkout@main
 
@@ -41,12 +56,6 @@ jobs:
       with:
         toolchain: ${{ matrix.rust }}
         override: true
-
-    - name: check
-      uses: actions-rs/cargo@v1
-      with:
-        command: check
-        args: --all --bins --examples
 
     - name: check avoid-dev-deps
       uses: actions-rs/cargo@v1
@@ -66,6 +75,12 @@ jobs:
       with:
         command: test
         args: --all --features sqlite,async_std
+
+    - name: mysql tests
+      uses: actions-rs/cargo@v1
+      with:
+        command: test
+        args: --all --features mysql,async_std -- --test-threads=1
 
   check_fmt_and_docs:
     name: Checking fmt, clippy, and docs

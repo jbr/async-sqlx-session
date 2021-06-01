@@ -1,14 +1,14 @@
 /*!
 # async-sqlx-session
 
-This crate currently provides two session stores:
-[`PostgresSessionStore`] and [`SqliteSessionStore`], each of which
-is enabled by a feature flag.
+This crate currently provides several session stores, each of which is
+enabled by a feature flag.
 
-To use [`SqliteSessionStore`], enable the `sqlite` feature on this
+* To use [`SqliteSessionStore`], enable the `sqlite` feature on this
 crate.
-
-To use [`PostgresSessionStore`], enable the `pg` feature on this
+* To use [`PostgresSessionStore`], enable the `pg` feature on this
+crate.
+* To use [`MysqlSessionStore`], enable the `mysql` feature on this
 crate.
 
 To use the `spawn_cleanup_task` function for either store on
@@ -49,3 +49,8 @@ pub use sqlite::SqliteSessionStore;
 mod pg;
 #[cfg(feature = "pg")]
 pub use pg::PostgresSessionStore;
+
+#[cfg(feature = "mysql")]
+mod mysql;
+#[cfg(feature = "mysql")]
+pub use mysql::MySqlSessionStore;
