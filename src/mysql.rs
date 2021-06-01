@@ -199,11 +199,14 @@ impl MySqlSessionStore {
     /// # Ok(()) }) }
     /// ```
     #[cfg(feature = "async_std")]
-    pub fn spawn_cleanup_task(&self, period: std::time::Duration) -> task::JoinHandle<()> {
+    pub fn spawn_cleanup_task(
+        &self,
+        period: std::time::Duration,
+    ) -> async_std::task::JoinHandle<()> {
         let store = self.clone();
-        task::spawn(async move {
+        async_std::task::spawn(async move {
             loop {
-                task::sleep(period).await;
+                async_std::task::sleep(period).await;
                 if let Err(error) = store.cleanup().await {
                     log::error!("cleanup error: {}", error);
                 }
