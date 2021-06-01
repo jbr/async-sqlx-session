@@ -59,13 +59,13 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --all --features pg -- --test-threads=1
+        args: --all --features pg,async_std -- --test-threads=1
 
     - name: sqlite tests
       uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --all --features sqlite
+        args: --all --features sqlite,async_std
 
   check_fmt_and_docs:
     name: Checking fmt, clippy, and docs
