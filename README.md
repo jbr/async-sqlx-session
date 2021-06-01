@@ -19,15 +19,23 @@
 ### sqlite: 
 
 ```toml
-async-sqlx-session = { version = "0.2.0", features = ["sqlite"] }
+async-sqlx-session = { version = "0.3.0", features = ["sqlite"] }
 ```
 
 ### postgres: 
 
 ```toml
-async-sqlx-session = { version = "0.2.0", features = ["pg"] }
+async-sqlx-session = { version = "0.3.0", features = ["pg"] }
 ```
 
+### Optional `async_std` feature
+
+To use the `spawn_cleanup_task` function on async-std, enable the
+`async_std` feature.
+
+```toml
+async-sqlx-session = { version = "0.3.0", features = ["pg", "async_std"] }
+```
 
 
 ## Cargo Features:

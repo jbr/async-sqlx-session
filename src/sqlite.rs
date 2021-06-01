@@ -1,7 +1,5 @@
 use async_session::{async_trait, chrono::Utc, log, serde_json, Result, Session, SessionStore};
-use async_std::task;
 use sqlx::{pool::PoolConnection, sqlite::SqlitePool, Sqlite};
-use std::time::Duration;
 
 /// sqlx sqlite session store for async-sessions
 ///
@@ -11,8 +9,9 @@ use std::time::Duration;
 /// use std::time::Duration;
 ///
 /// # fn main() -> async_session::Result { async_std::task::block_on(async {
-/// let store = SqliteSessionStore::new("sqlite:%3Amemory:").await?;
+/// let store = SqliteSessionStore::new("sqlite::memory:").await?;
 /// store.migrate().await?;
+/// # #[cfg(feature = "async_std")]
 /// store.spawn_cleanup_task(Duration::from_secs(60 * 60));
 ///
 /// let mut session = Session::new();
@@ -39,7 +38,7 @@ impl SqliteSessionStore {
     /// # use async_sqlx_session::SqliteSessionStore;
     /// # use async_session::Result;
     /// # fn main() -> Result { async_std::task::block_on(async {
-    /// let pool = sqlx::SqlitePool::connect("sqlite:%3Amemory:").await.unwrap();
+    /// let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
     /// let store = SqliteSessionStore::from_client(pool)
     ///     .with_table_name("custom_table_name");
     /// store.migrate().await;
@@ -66,7 +65,7 @@ impl SqliteSessionStore {
     /// # use async_sqlx_session::SqliteSessionStore;
     /// # use async_session::Result;
     /// # fn main() -> Result { async_std::task::block_on(async {
-    /// let store = SqliteSessionStore::new("sqlite:%3Amemory:").await?;
+    /// let store = SqliteSessionStore::new("sqlite::memory:").await?;
     /// store.migrate().await;
     /// # Ok(()) }) }
     /// ```
@@ -85,7 +84,7 @@ impl SqliteSessionStore {
     /// # use async_sqlx_session::SqliteSessionStore;
     /// # use async_session::Result;
     /// # fn main() -> Result { async_std::task::block_on(async {
-    /// let store = SqliteSessionStore::new_with_table_name("sqlite:%3Amemory:", "custom_table_name").await?;
+    /// let store = SqliteSessionStore::new_with_table_name("sqlite::memory:", "custom_table_name").await?;
     /// store.migrate().await;
     /// # Ok(()) }) }
     /// ```
@@ -99,7 +98,7 @@ impl SqliteSessionStore {
     /// # use async_sqlx_session::SqliteSessionStore;
     /// # use async_session::Result;
     /// # fn main() -> Result { async_std::task::block_on(async {
-    /// let store = SqliteSessionStore::new("sqlite:%3Amemory:").await?
+    /// let store = SqliteSessionStore::new("sqlite::memory:").await?
     ///     .with_table_name("custom_name");
     /// store.migrate().await;
     /// # Ok(()) }) }
@@ -109,7 +108,7 @@ impl SqliteSessionStore {
     /// # use async_sqlx_session::SqliteSessionStore;
     /// # use async_session::Result;
     /// # fn main() -> Result { async_std::task::block_on(async {
-    /// let store = SqliteSessionStore::new("sqlite:%3Amemory:").await?
+    /// let store = SqliteSessionStore::new("sqlite::memory:").await?
     ///     .with_table_name("johnny (); drop users;");
     /// # Ok(()) }) }
     /// ```
@@ -139,7 +138,7 @@ impl SqliteSessionStore {
     /// # use async_sqlx_session::SqliteSessionStore;
     /// # use async_session::{Result, SessionStore, Session};
     /// # fn main() -> Result { async_std::task::block_on(async {
-    /// let store = SqliteSessionStore::new("sqlite:%3Amemory:").await?;
+    /// let store = SqliteSessionStore::new("sqlite::memory:").await?;
     /// assert!(store.count().await.is_err());
     /// store.migrate().await?;
     /// store.store_session(Session::new()).await?;
@@ -177,13 +176,15 @@ impl SqliteSessionStore {
     }
 
     /// Spawns an async_std::task that clears out stale (expired)
-    /// sessions on a periodic basis.
+    /// sessions on a periodic basis. Only available with the
+    /// async_std feature enabled.
+    ///
     /// ```rust,no_run
     /// # use async_sqlx_session::SqliteSessionStore;
     /// # use async_session::{Result, SessionStore, Session};
     /// # use std::time::Duration;
     /// # fn main() -> Result { async_std::task::block_on(async {
-    /// let store = SqliteSessionStore::new("sqlite:%3Amemory:").await?;
+    /// let store = SqliteSessionStore::new("sqlite::memory:").await?;
     /// store.migrate().await?;
     /// # let join_handle =
     /// store.spawn_cleanup_task(Duration::from_secs(1));
@@ -196,11 +197,15 @@ impl SqliteSessionStore {
     /// # join_handle.cancel().await;
     /// # Ok(()) }) }
     /// ```
-    pub fn spawn_cleanup_task(&self, period: Duration) -> task::JoinHandle<()> {
+    #[cfg(feature = "async_std")]
+    pub fn spawn_cleanup_task(
+        &self,
+        period: std::time::Duration,
+    ) -> async_std::task::JoinHandle<()> {
         let store = self.clone();
-        task::spawn(async move {
+        async_std::task::spawn(async move {
             loop {
-                task::sleep(period).await;
+                async_std::task::sleep(period).await;
                 if let Err(error) = store.cleanup().await {
                     log::error!("cleanup error: {}", error);
                 }
@@ -214,7 +219,7 @@ impl SqliteSessionStore {
     /// # use async_sqlx_session::SqliteSessionStore;
     /// # use async_session::{chrono::{Utc,Duration}, Result, SessionStore, Session};
     /// # fn main() -> Result { async_std::task::block_on(async {
-    /// let store = SqliteSessionStore::new("sqlite:%3Amemory:").await?;
+    /// let store = SqliteSessionStore::new("sqlite::memory:").await?;
     /// store.migrate().await?;
     /// let mut session = Session::new();
     /// session.set_expiry(Utc::now() - Duration::seconds(5));
@@ -247,7 +252,7 @@ impl SqliteSessionStore {
     /// # use async_session::{Result, SessionStore, Session};
     /// # use std::time::Duration;
     /// # fn main() -> Result { async_std::task::block_on(async {
-    /// let store = SqliteSessionStore::new("sqlite:%3Amemory:").await?;
+    /// let store = SqliteSessionStore::new("sqlite::memory:").await?;
     /// store.migrate().await?;
     /// assert_eq!(store.count().await?, 0);
     /// store.store_session(Session::new()).await?;
@@ -342,9 +347,10 @@ impl SessionStore for SqliteSessionStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     async fn test_store() -> SqliteSessionStore {
-        let store = SqliteSessionStore::new("sqlite:%3Amemory:")
+        let store = SqliteSessionStore::new("sqlite::memory:")
             .await
             .expect("building a sqlite :memory: SqliteSessionStore");
         store
@@ -468,7 +474,7 @@ mod tests {
 
         assert!(!loaded_session.is_expired());
 
-        task::sleep(Duration::from_secs(1)).await;
+        async_std::task::sleep(Duration::from_secs(1)).await;
         assert_eq!(None, store.load_session(cookie_value).await?);
 
         Ok(())
