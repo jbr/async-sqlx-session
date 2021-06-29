@@ -1,6 +1,6 @@
 [package]
 name = "async-sqlx-session"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["Jacob Rothstein <hi@jbr.me>"]
 edition = "2018"
 description = "sqlx session store for async-session"
@@ -12,15 +12,15 @@ keywords = ["sessions", "sqlx", "sqlite", "postgres", "mysql"]
 categories = ["web-programming::http-server", "web-programming", "database"]
 
 [package.metadata.docs.rs]
-features = ["pg", "sqlite", "mysql", "async_std"]
+features = ["pg", "sqlite", "mysql", "async_std_native_tls", "async_std_rustls", "tokio_native_tls", "tokio_rustls"]
 
 [features]
-default = ["native-tls"]
 sqlite = ["sqlx/sqlite"]
 pg = ["sqlx/postgres", "sqlx/json"]
-native-tls = ["sqlx/runtime-async-std-native-tls"]
-rustls = ["sqlx/runtime-async-std-rustls"]
-async_std = ["async-std"]
+async_std_native_tls = ["sqlx/runtime-async-std-native-tls", "async-std"]
+async_std_rustls = ["sqlx/runtime-async-std-rustls", "async-std"]
+tokio_native_tls = ["sqlx/runtime-tokio-native-tls"]
+tokio_rustls = ["sqlx/runtime-tokio-rustls"]
 mysql = ["sqlx/mysql", "sqlx/json"]
 
 [dependencies]
