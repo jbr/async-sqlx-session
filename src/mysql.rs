@@ -1,19 +1,18 @@
-use async_session::{async_trait, chrono::Utc, log, serde_json, Result, Session, SessionStore};
+use async_session::{async_trait, Session, SessionStore};
 use sqlx::{pool::PoolConnection, Executor, MySql, MySqlPool};
+use time::OffsetDateTime;
 
 /// sqlx mysql session store for async-sessions
 ///
 /// ```rust
-/// use async_sqlx_session::MySqlSessionStore;
+/// use async_sqlx_session::{MySqlSessionStore, Error};
 /// use async_session::{Session, SessionStore};
 /// use std::time::Duration;
 ///
-/// # fn main() -> async_session::Result { async_std::task::block_on(async {
+/// # fn main() -> Result<(), Error> { async_std::task::block_on(async {
 /// let store = MySqlSessionStore::new(&std::env::var("MYSQL_TEST_DB_URL").unwrap()).await?;
 /// store.migrate().await?;
 /// # store.clear_store().await?;
-/// # #[cfg(feature = "async_std")]
-/// store.spawn_cleanup_task(Duration::from_secs(60 * 60));
 ///
 /// let mut session = Session::new();
 /// session.insert("key", vec![1,2,3]);
@@ -36,9 +35,8 @@ impl MySqlSessionStore {
     /// with [`with_table_name`](crate::MySqlSessionStore::with_table_name).
     ///
     /// ```rust
-    /// # use async_sqlx_session::MySqlSessionStore;
-    /// # use async_session::Result;
-    /// # fn main() -> Result { async_std::task::block_on(async {
+    /// # use async_sqlx_session::{MySqlSessionStore, Error};
+    /// # fn main() -> Result<(), Error> { async_std::task::block_on(async {
     /// let pool = sqlx::MySqlPool::connect(&std::env::var("MYSQL_TEST_DB_URL").unwrap()).await.unwrap();
     /// let store = MySqlSessionStore::from_client(pool)
     ///     .with_table_name("custom_table_name");
@@ -60,9 +58,8 @@ impl MySqlSessionStore {
     /// [`new_with_table_name`](crate::MySqlSessionStore::new_with_table_name)
     ///
     /// ```rust
-    /// # use async_sqlx_session::MySqlSessionStore;
-    /// # use async_session::Result;
-    /// # fn main() -> Result { async_std::task::block_on(async {
+    /// # use async_sqlx_session::{MySqlSessionStore, Error};
+    /// # fn main() -> Result<(), Error> { async_std::task::block_on(async {
     /// let store = MySqlSessionStore::new(&std::env::var("MYSQL_TEST_DB_URL").unwrap()).await?;
     /// store.migrate().await;
     /// # Ok(()) }) }
@@ -80,9 +77,8 @@ impl MySqlSessionStore {
     /// [`new_with_table_name`](crate::MySqlSessionStore::new_with_table_name)
     ///
     /// ```rust
-    /// # use async_sqlx_session::MySqlSessionStore;
-    /// # use async_session::Result;
-    /// # fn main() -> Result { async_std::task::block_on(async {
+    /// # use async_sqlx_session::{MySqlSessionStore, Error};
+    /// # fn main() -> Result<(), Error> { async_std::task::block_on(async {
     /// let store = MySqlSessionStore::new_with_table_name(&std::env::var("MYSQL_TEST_DB_URL").unwrap(), "custom_table_name").await?;
     /// store.migrate().await;
     /// # Ok(()) }) }
@@ -94,9 +90,8 @@ impl MySqlSessionStore {
     /// Chainable method to add a custom table name. This will panic
     /// if the table name is not `[a-zA-Z0-9_-]`.
     /// ```rust
-    /// # use async_sqlx_session::MySqlSessionStore;
-    /// # use async_session::Result;
-    /// # fn main() -> Result { async_std::task::block_on(async {
+    /// # use async_sqlx_session::{MySqlSessionStore, Error};
+    /// # fn main() -> Result<(), Error> { async_std::task::block_on(async {
     /// let store = MySqlSessionStore::new(&std::env::var("MYSQL_TEST_DB_URL").unwrap()).await?
     ///     .with_table_name("custom_name");
     /// store.migrate().await;
@@ -104,9 +99,8 @@ impl MySqlSessionStore {
     /// ```
     ///
     /// ```should_panic
-    /// # use async_sqlx_session::MySqlSessionStore;
-    /// # use async_session::Result;
-    /// # fn main() -> Result { async_std::task::block_on(async {
+    /// # use async_sqlx_session::{MySqlSessionStore, Error};
+    /// # fn main() -> Result<(), Error> { async_std::task::block_on(async {
     /// let store = MySqlSessionStore::new(&std::env::var("MYSQL_TEST_DB_URL").unwrap()).await?
     ///     .with_table_name("johnny (); drop users;");
     /// # Ok(()) }) }
@@ -134,9 +128,9 @@ impl MySqlSessionStore {
     /// exactly-once modifications to the schema of the session table
     /// on breaking releases.
     /// ```rust
-    /// # use async_sqlx_session::MySqlSessionStore;
-    /// # use async_session::{Result, SessionStore, Session};
-    /// # fn main() -> Result { async_std::task::block_on(async {
+    /// # use async_sqlx_session::{MySqlSessionStore, Error};
+    /// # use async_session::{SessionStore, Session};
+    /// # fn main() -> Result<(), Error> { async_std::task::block_on(async {
     /// let store = MySqlSessionStore::new(&std::env::var("MYSQL_TEST_DB_URL").unwrap()).await?;
     /// # store.clear_store().await?;
     /// store.migrate().await?;
@@ -176,55 +170,19 @@ impl MySqlSessionStore {
         self.client.acquire().await
     }
 
-    /// Spawns an async_std::task that clears out stale (expired)
-    /// sessions on a periodic basis. Only available with the
-    /// async_std feature enabled.
-    ///
-    /// ```rust,no_run
-    /// # use async_sqlx_session::MySqlSessionStore;
-    /// # use async_session::{Result, SessionStore, Session};
-    /// # use std::time::Duration;
-    /// # fn main() -> Result { async_std::task::block_on(async {
-    /// let store = MySqlSessionStore::new(&std::env::var("MYSQL_TEST_DB_URL").unwrap()).await?;
-    /// store.migrate().await?;
-    /// # let join_handle =
-    /// store.spawn_cleanup_task(Duration::from_secs(1));
-    /// let mut session = Session::new();
-    /// session.expire_in(Duration::from_secs(0));
-    /// store.store_session(session).await?;
-    /// assert_eq!(store.count().await?, 1);
-    /// async_std::task::sleep(Duration::from_secs(2)).await;
-    /// assert_eq!(store.count().await?, 0);
-    /// # join_handle.cancel().await;
-    /// # Ok(()) }) }
-    /// ```
-    #[cfg(feature = "async_std")]
-    pub fn spawn_cleanup_task(
-        &self,
-        period: std::time::Duration,
-    ) -> async_std::task::JoinHandle<()> {
-        let store = self.clone();
-        async_std::task::spawn(async move {
-            loop {
-                async_std::task::sleep(period).await;
-                if let Err(error) = store.cleanup().await {
-                    log::error!("cleanup error: {}", error);
-                }
-            }
-        })
-    }
-
     /// Performs a one-time cleanup task that clears out stale
     /// (expired) sessions. You may want to call this from cron.
     /// ```rust
-    /// # use async_sqlx_session::MySqlSessionStore;
-    /// # use async_session::{chrono::{Utc,Duration}, Result, SessionStore, Session};
-    /// # fn main() -> Result { async_std::task::block_on(async {
+    /// # use async_sqlx_session::{MySqlSessionStore, Error};
+    /// # use async_session::{SessionStore, Session};
+    /// # use std::time::Duration;
+    /// # use time::OffsetDateTime;
+    /// # fn main() -> Result<(), Error> { async_std::task::block_on(async {
     /// let store = MySqlSessionStore::new(&std::env::var("MYSQL_TEST_DB_URL").unwrap()).await?;
     /// store.migrate().await?;
     /// # store.clear_store().await?;
     /// let mut session = Session::new();
-    /// session.set_expiry(Utc::now() - Duration::seconds(5));
+    /// session.set_expiry(OffsetDateTime::now_utc() - Duration::from_secs(5));
     /// store.store_session(session).await?;
     /// assert_eq!(store.count().await?, 1);
     /// store.cleanup().await?;
@@ -234,7 +192,7 @@ impl MySqlSessionStore {
     pub async fn cleanup(&self) -> sqlx::Result<()> {
         let mut connection = self.connection().await?;
         sqlx::query(&self.substitute_table_name("DELETE FROM %%TABLE_NAME%% WHERE expires < ?"))
-            .bind(Utc::now())
+            .bind(OffsetDateTime::now_utc())
             .execute(&mut connection)
             .await?;
 
@@ -245,10 +203,10 @@ impl MySqlSessionStore {
     /// expired sessions
     ///
     /// ```rust
-    /// # use async_sqlx_session::MySqlSessionStore;
-    /// # use async_session::{Result, SessionStore, Session};
+    /// # use async_sqlx_session::{MySqlSessionStore, Error};
+    /// # use async_session::{SessionStore, Session};
     /// # use std::time::Duration;
-    /// # fn main() -> Result { async_std::task::block_on(async {
+    /// # fn main() -> Result<(), Error> { async_std::task::block_on(async {
     /// let store = MySqlSessionStore::new(&std::env::var("MYSQL_TEST_DB_URL").unwrap()).await?;
     /// store.migrate().await?;
     /// # store.clear_store().await?;
@@ -270,26 +228,34 @@ impl MySqlSessionStore {
 
 #[async_trait]
 impl SessionStore for MySqlSessionStore {
-    async fn load_session(&self, cookie_value: String) -> Result<Option<Session>> {
+    type Error = crate::Error;
+
+    async fn load_session(&self, cookie_value: String) -> Result<Option<Session>, Self::Error> {
         let id = Session::id_from_cookie_value(&cookie_value)?;
         let mut connection = self.connection().await?;
 
-        let result: Option<(String,)> = sqlx::query_as(&self.substitute_table_name(
-            "SELECT session FROM %%TABLE_NAME%% WHERE id = ? AND (expires IS NULL OR expires > ?)",
+        let result: Option<(String, Option<OffsetDateTime>)> = sqlx::query_as(&self.substitute_table_name(
+            "SELECT session, expires FROM %%TABLE_NAME%% WHERE id = ? AND (expires IS NULL OR expires > ?)",
         ))
         .bind(&id)
-        .bind(Utc::now())
+        .bind(OffsetDateTime::now_utc())
         .fetch_optional(&mut connection)
         .await?;
 
-        Ok(result
-            .map(|(session,)| serde_json::from_str(&session))
-            .transpose()?)
+        if let Some((data, expiry)) = result {
+            Ok(Some(Session::from_parts(
+                id,
+                serde_json::from_str(&data)?,
+                expiry,
+            )))
+        } else {
+            Ok(None)
+        }
     }
 
-    async fn store_session(&self, session: Session) -> Result<Option<String>> {
+    async fn store_session(&self, session: Session) -> Result<Option<String>, Self::Error> {
         let id = session.id();
-        let string = serde_json::to_string(&session)?;
+        let string = serde_json::to_string(session.data())?;
         let mut connection = self.connection().await?;
 
         sqlx::query(&self.substitute_table_name(
@@ -310,7 +276,7 @@ impl SessionStore for MySqlSessionStore {
         Ok(session.into_cookie_value())
     }
 
-    async fn destroy_session(&self, session: Session) -> Result {
+    async fn destroy_session(&self, session: Session) -> Result<(), Self::Error> {
         let id = session.id();
         let mut connection = self.connection().await?;
         sqlx::query(&self.substitute_table_name("DELETE FROM %%TABLE_NAME%% WHERE id = ?"))
@@ -321,7 +287,7 @@ impl SessionStore for MySqlSessionStore {
         Ok(())
     }
 
-    async fn clear_store(&self) -> Result {
+    async fn clear_store(&self) -> Result<(), Self::Error> {
         let mut connection = self.connection().await?;
         sqlx::query(&self.substitute_table_name("TRUNCATE %%TABLE_NAME%%"))
             .execute(&mut connection)
@@ -334,8 +300,9 @@ impl SessionStore for MySqlSessionStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use async_session::chrono::DateTime;
-    use std::time::Duration;
+    use serde_json::{json, Value};
+    use std::{collections::HashMap, time::Duration};
+    use time::OffsetDateTime;
 
     async fn test_store() -> MySqlSessionStore {
         let store = MySqlSessionStore::new(&std::env::var("MYSQL_TEST_DB_URL").unwrap())
@@ -353,14 +320,14 @@ mod tests {
     }
 
     #[async_std::test]
-    async fn creating_a_new_session_with_no_expiry() -> Result {
+    async fn creating_a_new_session_with_no_expiry() -> Result<(), crate::Error> {
         let store = test_store().await;
         let mut session = Session::new();
         session.insert("key", "value")?;
         let cloned = session.clone();
         let cookie_value = store.store_session(session).await?.unwrap();
 
-        let (id, expires, serialized, count): (String, Option<DateTime<Utc>>, String, i64) =
+        let (id, expires, serialized, count): (String, Option<OffsetDateTime>, String, i64) =
             sqlx::query_as("select id, expires, session, (select count(*) from async_sessions) from async_sessions")
                 .fetch_one(&mut store.connection().await?)
                 .await?;
@@ -369,9 +336,11 @@ mod tests {
         assert_eq!(id, cloned.id());
         assert_eq!(expires, None);
 
-        let deserialized_session: Session = serde_json::from_str(&serialized)?;
-        assert_eq!(cloned.id(), deserialized_session.id());
-        assert_eq!("value", &deserialized_session.get::<String>("key").unwrap());
+        let deserialized_session: HashMap<String, Value> = serde_json::from_str(&serialized)?;
+        assert_eq!(
+            &json!("value"),
+            deserialized_session.get(&String::from("key")).unwrap()
+        );
 
         let loaded_session = store.load_session(cookie_value).await?.unwrap();
         assert_eq!(cloned.id(), loaded_session.id());
@@ -382,7 +351,7 @@ mod tests {
     }
 
     #[async_std::test]
-    async fn updating_a_session() -> Result {
+    async fn updating_a_session() -> Result<(), crate::Error> {
         let store = test_store().await;
         let mut session = Session::new();
         let original_id = session.id().to_owned();
@@ -409,7 +378,7 @@ mod tests {
     }
 
     #[async_std::test]
-    async fn updating_a_session_extending_expiry() -> Result {
+    async fn updating_a_session_extending_expiry() -> Result<(), crate::Error> {
         let store = test_store().await;
         let mut session = Session::new();
         session.expire_in(Duration::from_secs(10));
@@ -418,49 +387,57 @@ mod tests {
         let cookie_value = store.store_session(session).await?.unwrap();
 
         let mut session = store.load_session(cookie_value.clone()).await?.unwrap();
-        assert_eq!(session.expiry().unwrap(), &original_expires);
+        assert_eq!(
+            session.expiry().unwrap().unix_timestamp(),
+            original_expires.unix_timestamp()
+        );
         session.expire_in(Duration::from_secs(20));
         let new_expires = session.expiry().unwrap().clone();
         store.store_session(session).await?;
 
         let session = store.load_session(cookie_value.clone()).await?.unwrap();
-        assert_eq!(session.expiry().unwrap(), &new_expires);
+        assert_eq!(
+            session.expiry().unwrap().unix_timestamp(),
+            new_expires.unix_timestamp()
+        );
 
-        let (id, expires, count): (String, DateTime<Utc>, i64) = sqlx::query_as(
+        let (id, expires, count): (String, Option<OffsetDateTime>, i64) = sqlx::query_as(
             "select id, expires, (select count(*) from async_sessions) from async_sessions",
         )
         .fetch_one(&mut store.connection().await?)
         .await?;
 
         assert_eq!(1, count);
-        assert_eq!(expires.timestamp_millis(), new_expires.timestamp_millis());
+        assert_eq!(
+            expires.unwrap().unix_timestamp(),
+            new_expires.unix_timestamp()
+        );
         assert_eq!(original_id, id);
 
         Ok(())
     }
 
     #[async_std::test]
-    async fn creating_a_new_session_with_expiry() -> Result {
+    async fn creating_a_new_session_with_expiry() -> Result<(), crate::Error> {
         let store = test_store().await;
         let mut session = Session::new();
-        session.expire_in(Duration::from_secs(1));
+        session.expire_in(std::time::Duration::from_secs(1));
         session.insert("key", "value")?;
         let cloned = session.clone();
 
         let cookie_value = store.store_session(session).await?.unwrap();
 
-        let (id, expires, serialized, count): (String, Option<DateTime<Utc>>, String, i64) =
+        let (id, expires, serialized, count): (String, Option<OffsetDateTime>, String, i64) =
             sqlx::query_as("select id, expires, session, (select count(*) from async_sessions) from async_sessions")
                 .fetch_one(&mut store.connection().await?)
                 .await?;
 
         assert_eq!(1, count);
         assert_eq!(id, cloned.id());
-        assert!(expires.unwrap() > Utc::now());
+        assert!(expires.unwrap() > OffsetDateTime::now_utc());
 
-        let deserialized_session: Session = serde_json::from_str(&serialized)?;
-        assert_eq!(cloned.id(), deserialized_session.id());
-        assert_eq!("value", &deserialized_session.get::<String>("key").unwrap());
+        let deserialized_session: HashMap<String, Value> = serde_json::from_str(&serialized)?;
+        assert_eq!(&json!("value"), deserialized_session.get("key").unwrap());
 
         let loaded_session = store.load_session(cookie_value.clone()).await?.unwrap();
         assert_eq!(cloned.id(), loaded_session.id());
@@ -468,14 +445,14 @@ mod tests {
 
         assert!(!loaded_session.is_expired());
 
-        async_std::task::sleep(Duration::from_secs(1)).await;
+        async_std::task::sleep(std::time::Duration::from_secs(1)).await;
         assert_eq!(None, store.load_session(cookie_value).await?);
 
         Ok(())
     }
 
     #[async_std::test]
-    async fn destroying_a_single_session() -> Result {
+    async fn destroying_a_single_session() -> Result<(), crate::Error> {
         let store = test_store().await;
         for _ in 0..3i8 {
             store.store_session(Session::new()).await?;
@@ -494,7 +471,7 @@ mod tests {
     }
 
     #[async_std::test]
-    async fn clearing_the_whole_store() -> Result {
+    async fn clearing_the_whole_store() -> Result<(), crate::Error> {
         let store = test_store().await;
         for _ in 0..3i8 {
             store.store_session(Session::new()).await?;
