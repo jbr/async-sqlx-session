@@ -34,18 +34,6 @@ async-sqlx-session = { version = "0.4.0", features = ["pg"] }
 async-sqlx-session = { version = "0.4.0", features = ["mysql"] }
 ```
 
-### Optional `async_std` feature
-
-To use the `spawn_cleanup_task` function on the async-std runtime,
-enable the `async_std` feature, which can be combined with any of the
-above datastores.
-
-```toml
-async-sqlx-session = { version = "0.4.0", features = ["pg", "async_std"] }
-```
-
-## Cargo Features:
-
 ## Safety
 This crate uses ``#![deny(unsafe_code)]`` to ensure everything is implemented in
 100% Safe Rust.
@@ -58,7 +46,7 @@ Licensed under either of <a href="LICENSE-APACHE">Apache License, Version
 </sup>
 
 <br/>
-
+p
 <sub>
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in this crate by you, as defined in the Apache-2.0 license, shall

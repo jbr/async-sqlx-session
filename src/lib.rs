@@ -54,3 +54,6 @@ pub use pg::PostgresSessionStore;
 mod mysql;
 #[cfg(feature = "mysql")]
 pub use mysql::MySqlSessionStore;
+
+mod error;
+pub use error::Error;

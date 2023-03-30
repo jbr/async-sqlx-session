@@ -57,30 +57,23 @@ jobs:
         toolchain: ${{ matrix.rust }}
         override: true
 
-    - name: check avoid-dev-deps
-      uses: actions-rs/cargo@v1
-      if: matrix.rust == 'nightly'
-      with:
-        command: check
-        args: --all -Z avoid-dev-deps
-
     - name: pg tests
       uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --all --features pg,async_std -- --test-threads=1
+        args: --all --features pg -- --test-threads=1
 
     - name: sqlite tests
       uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --all --features sqlite,async_std
+        args: --all --features sqlite
 
     - name: mysql tests
       uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --all --features mysql,async_std -- --test-threads=1
+        args: --all --features mysql -- --test-threads=1
 
   check_fmt_and_docs:
     name: Checking fmt, clippy, and docs
