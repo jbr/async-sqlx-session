@@ -274,9 +274,9 @@ impl SessionStore for SqliteSessionStore {
               session = excluded.session
             "#,
         ))
-        .bind(&id)
+        .bind(id)
         .bind(&string)
-        .bind(&session.expiry().map(|expiry| expiry.unix_timestamp()))
+        .bind(session.expiry().map(|expiry| expiry.unix_timestamp()))
         .execute(&mut connection)
         .await?;
 
@@ -291,7 +291,7 @@ impl SessionStore for SqliteSessionStore {
             DELETE FROM %%TABLE_NAME%% WHERE id = ?
             "#,
         ))
-        .bind(&id)
+        .bind(id)
         .execute(&mut connection)
         .await?;
 
@@ -390,7 +390,7 @@ mod tests {
         let mut session = Session::new();
         session.expire_in(Duration::from_secs(10));
         let original_id = session.id().to_owned();
-        let original_expires = session.expiry().unwrap().clone();
+        let original_expires = *session.expiry().unwrap();
         let cookie_value = store.store_session(&mut session).await?.unwrap();
 
         let mut session = store.load_session(&cookie_value).await?.unwrap();
@@ -399,7 +399,7 @@ mod tests {
             &original_expires.replace_millisecond(0).unwrap()
         );
         session.expire_in(Duration::from_secs(20));
-        let new_expires = session.expiry().unwrap().clone();
+        let new_expires = *session.expiry().unwrap();
         store.store_session(&mut session).await?;
 
         let session = store.load_session(&cookie_value).await?.unwrap();

@@ -231,7 +231,7 @@ impl SessionStore for MySqlSessionStore {
     type Error = crate::Error;
 
     async fn load_session(&self, cookie_value: &str) -> Result<Option<Session>, Self::Error> {
-        let id = Session::id_from_cookie_value(&cookie_value)?;
+        let id = Session::id_from_cookie_value(cookie_value)?;
         let mut connection = self.connection().await?;
 
         let result: Option<(String, Option<OffsetDateTime>)> = sqlx::query_as(&self.substitute_table_name(
@@ -267,9 +267,9 @@ impl SessionStore for MySqlSessionStore {
               session = VALUES(session)
             "#,
         ))
-        .bind(&id)
+        .bind(id)
         .bind(&string)
-        .bind(&session.expiry())
+        .bind(session.expiry())
         .execute(&mut connection)
         .await?;
 
@@ -280,7 +280,7 @@ impl SessionStore for MySqlSessionStore {
         let id = session.id();
         let mut connection = self.connection().await?;
         sqlx::query(&self.substitute_table_name("DELETE FROM %%TABLE_NAME%% WHERE id = ?"))
-            .bind(&id)
+            .bind(id)
             .execute(&mut connection)
             .await?;
 
@@ -383,7 +383,7 @@ mod tests {
         let mut session = Session::new();
         session.expire_in(Duration::from_secs(10));
         let original_id = session.id().to_owned();
-        let original_expires = session.expiry().unwrap().clone();
+        let original_expires = *session.expiry().unwrap();
         let cookie_value = store.store_session(&mut session).await?.unwrap();
 
         let mut session = store.load_session(&cookie_value).await?.unwrap();
@@ -392,7 +392,7 @@ mod tests {
             original_expires.unix_timestamp()
         );
         session.expire_in(Duration::from_secs(20));
-        let new_expires = session.expiry().unwrap().clone();
+        let new_expires = *session.expiry().unwrap();
         store.store_session(&mut session).await?;
 
         let session = store.load_session(&cookie_value).await?.unwrap();
