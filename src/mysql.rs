@@ -235,7 +235,7 @@ impl MySqlSessionStore {
         let mut connection = self.connection().await?;
         sqlx::query(&self.substitute_table_name("DELETE FROM %%TABLE_NAME%% WHERE expires < ?"))
             .bind(Utc::now())
-            .execute(&mut connection)
+            .execute(&mut *connection)
             .await?;
 
         Ok(())
@@ -261,7 +261,7 @@ impl MySqlSessionStore {
     pub async fn count(&self) -> sqlx::Result<i64> {
         let (count,) =
             sqlx::query_as(&self.substitute_table_name("SELECT COUNT(*) FROM %%TABLE_NAME%%"))
-                .fetch_one(&mut self.connection().await?)
+                .fetch_one(&mut *self.connection().await?)
                 .await?;
 
         Ok(count)
@@ -279,7 +279,7 @@ impl SessionStore for MySqlSessionStore {
         ))
         .bind(&id)
         .bind(Utc::now())
-        .fetch_optional(&mut connection)
+        .fetch_optional(&mut *connection)
         .await?;
 
         Ok(result
@@ -304,7 +304,7 @@ impl SessionStore for MySqlSessionStore {
         .bind(&id)
         .bind(&string)
         .bind(&session.expiry())
-        .execute(&mut connection)
+        .execute(&mut *connection)
         .await?;
 
         Ok(session.into_cookie_value())
@@ -315,7 +315,7 @@ impl SessionStore for MySqlSessionStore {
         let mut connection = self.connection().await?;
         sqlx::query(&self.substitute_table_name("DELETE FROM %%TABLE_NAME%% WHERE id = ?"))
             .bind(&id)
-            .execute(&mut connection)
+            .execute(&mut *connection)
             .await?;
 
         Ok(())
@@ -324,7 +324,7 @@ impl SessionStore for MySqlSessionStore {
     async fn clear_store(&self) -> Result {
         let mut connection = self.connection().await?;
         sqlx::query(&self.substitute_table_name("TRUNCATE %%TABLE_NAME%%"))
-            .execute(&mut connection)
+            .execute(&mut *connection)
             .await?;
 
         Ok(())
@@ -360,9 +360,9 @@ mod tests {
         let cloned = session.clone();
         let cookie_value = store.store_session(session).await?.unwrap();
 
-        let (id, expires, serialized, count): (String, Option<DateTime<Utc>>, String, i64) =
+        let (id, expires, serialized, count): (String, Option<DateTime>, String, i64) =
             sqlx::query_as("select id, expires, session, (select count(*) from async_sessions) from async_sessions")
-                .fetch_one(&mut store.connection().await?)
+                .fetch_one(&mut *store.connection().await?)
                 .await?;
 
         assert_eq!(1, count);
@@ -399,7 +399,7 @@ mod tests {
 
         let (id, count): (String, i64) =
             sqlx::query_as("select id, (select count(*) from async_sessions) from async_sessions")
-                .fetch_one(&mut store.connection().await?)
+                .fetch_one(&mut *store.connection().await?)
                 .await?;
 
         assert_eq!(1, count);
@@ -426,10 +426,10 @@ mod tests {
         let session = store.load_session(cookie_value.clone()).await?.unwrap();
         assert_eq!(session.expiry().unwrap(), &new_expires);
 
-        let (id, expires, count): (String, DateTime<Utc>, i64) = sqlx::query_as(
+        let (id, expires, count): (String, DateTime, i64) = sqlx::query_as(
             "select id, expires, (select count(*) from async_sessions) from async_sessions",
         )
-        .fetch_one(&mut store.connection().await?)
+        .fetch_one(&mut *store.connection().await?)
         .await?;
 
         assert_eq!(1, count);
@@ -449,9 +449,9 @@ mod tests {
 
         let cookie_value = store.store_session(session).await?.unwrap();
 
-        let (id, expires, serialized, count): (String, Option<DateTime<Utc>>, String, i64) =
+        let (id, expires, serialized, count): (String, Option<DateTime>, String, i64) =
             sqlx::query_as("select id, expires, session, (select count(*) from async_sessions) from async_sessions")
-                .fetch_one(&mut store.connection().await?)
+                .fetch_one(&mut *store.connection().await?)
                 .await?;
 
         assert_eq!(1, count);

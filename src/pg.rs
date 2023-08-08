@@ -1,5 +1,7 @@
-use async_session::{async_trait, chrono::Utc, log, serde_json, Result, Session, SessionStore};
+use async_session::{async_trait, log, serde_json, Result, Session, SessionStore};
 use sqlx::{pool::PoolConnection, Executor, PgPool, Postgres};
+
+use time::OffsetDateTime as DateTime;
 
 /// sqlx postgres session store for async-sessions
 ///
@@ -216,13 +218,14 @@ impl PostgresSessionStore {
     /// (expired) sessions. You may want to call this from cron.
     /// ```rust
     /// # use async_sqlx_session::PostgresSessionStore;
-    /// # use async_session::{chrono::{Utc,Duration}, Result, SessionStore, Session};
+    /// # use async_session::{Result, SessionStore, Session};
+    /// # use time::Duration;
     /// # fn main() -> Result { async_std::task::block_on(async {
     /// let store = PostgresSessionStore::new(&std::env::var("PG_TEST_DB_URL").unwrap()).await?;
     /// store.migrate().await?;
     /// # store.clear_store().await?;
     /// let mut session = Session::new();
-    /// session.set_expiry(Utc::now() - Duration::seconds(5));
+    /// session.set_expiry(time::OffsetDateTime::now_utc() - Duration::seconds(5));
     /// store.store_session(session).await?;
     /// assert_eq!(store.count().await?, 1);
     /// store.cleanup().await?;
@@ -232,8 +235,8 @@ impl PostgresSessionStore {
     pub async fn cleanup(&self) -> sqlx::Result<()> {
         let mut connection = self.connection().await?;
         sqlx::query(&self.substitute_table_name("DELETE FROM %%TABLE_NAME%% WHERE expires < $1"))
-            .bind(Utc::now())
-            .execute(&mut connection)
+            .bind(DateTime::now_utc())
+            .execute(&mut *connection)
             .await?;
 
         Ok(())
@@ -259,7 +262,7 @@ impl PostgresSessionStore {
     pub async fn count(&self) -> sqlx::Result<i64> {
         let (count,) =
             sqlx::query_as(&self.substitute_table_name("SELECT COUNT(*) FROM %%TABLE_NAME%%"))
-                .fetch_one(&mut self.connection().await?)
+                .fetch_one(&mut *self.connection().await?)
                 .await?;
 
         Ok(count)
@@ -276,8 +279,8 @@ impl SessionStore for PostgresSessionStore {
             "SELECT session FROM %%TABLE_NAME%% WHERE id = $1 AND (expires IS NULL OR expires > $2)"
         ))
         .bind(&id)
-        .bind(Utc::now())
-        .fetch_optional(&mut connection)
+        .bind(DateTime::now_utc())
+        .fetch_optional(&mut *connection)
         .await?;
 
         Ok(result
@@ -302,7 +305,7 @@ impl SessionStore for PostgresSessionStore {
         .bind(&id)
         .bind(&string)
         .bind(&session.expiry())
-        .execute(&mut connection)
+        .execute(&mut *connection)
         .await?;
 
         Ok(session.into_cookie_value())
@@ -313,7 +316,7 @@ impl SessionStore for PostgresSessionStore {
         let mut connection = self.connection().await?;
         sqlx::query(&self.substitute_table_name("DELETE FROM %%TABLE_NAME%% WHERE id = $1"))
             .bind(&id)
-            .execute(&mut connection)
+            .execute(&mut *connection)
             .await?;
 
         Ok(())
@@ -322,7 +325,7 @@ impl SessionStore for PostgresSessionStore {
     async fn clear_store(&self) -> Result {
         let mut connection = self.connection().await?;
         sqlx::query(&self.substitute_table_name("TRUNCATE %%TABLE_NAME%%"))
-            .execute(&mut connection)
+            .execute(&mut *connection)
             .await?;
 
         Ok(())
@@ -332,7 +335,6 @@ impl SessionStore for PostgresSessionStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use async_session::chrono::DateTime;
     use std::time::Duration;
 
     async fn test_store() -> PostgresSessionStore {
@@ -358,9 +360,9 @@ mod tests {
         let cloned = session.clone();
         let cookie_value = store.store_session(session).await?.unwrap();
 
-        let (id, expires, serialized, count): (String, Option<DateTime<Utc>>, String, i64) =
+        let (id, expires, serialized, count): (String, Option<DateTime>, String, i64) =
             sqlx::query_as("select id, expires, session, (select count(*) from async_sessions) from async_sessions")
-                .fetch_one(&mut store.connection().await?)
+                .fetch_one(&mut *store.connection().await?)
                 .await?;
 
         assert_eq!(1, count);
@@ -397,7 +399,7 @@ mod tests {
 
         let (id, count): (String, i64) =
             sqlx::query_as("select id, (select count(*) from async_sessions) from async_sessions")
-                .fetch_one(&mut store.connection().await?)
+                .fetch_one(&mut *store.connection().await?)
                 .await?;
 
         assert_eq!(1, count);
@@ -424,14 +426,14 @@ mod tests {
         let session = store.load_session(cookie_value.clone()).await?.unwrap();
         assert_eq!(session.expiry().unwrap(), &new_expires);
 
-        let (id, expires, count): (String, DateTime<Utc>, i64) = sqlx::query_as(
+        let (id, expires, count): (String, DateTime, i64) = sqlx::query_as(
             "select id, expires, (select count(*) from async_sessions) from async_sessions",
         )
-        .fetch_one(&mut store.connection().await?)
+        .fetch_one(&mut *store.connection().await?)
         .await?;
 
         assert_eq!(1, count);
-        assert_eq!(expires.timestamp_millis(), new_expires.timestamp_millis());
+        assert_eq!(expires.unix_timestamp(), new_expires.unix_timestamp());
         assert_eq!(original_id, id);
 
         Ok(())
@@ -447,14 +449,14 @@ mod tests {
 
         let cookie_value = store.store_session(session).await?.unwrap();
 
-        let (id, expires, serialized, count): (String, Option<DateTime<Utc>>, String, i64) =
+        let (id, expires, serialized, count): (String, Option<DateTime>, String, i64) =
             sqlx::query_as("select id, expires, session, (select count(*) from async_sessions) from async_sessions")
-                .fetch_one(&mut store.connection().await?)
+                .fetch_one(&mut *store.connection().await?)
                 .await?;
 
         assert_eq!(1, count);
         assert_eq!(id, cloned.id());
-        assert!(expires.unwrap() > Utc::now());
+        assert!(expires.unwrap() > DateTime::now_utc());
 
         let deserialized_session: Session = serde_json::from_str(&serialized)?;
         assert_eq!(cloned.id(), deserialized_session.id());
