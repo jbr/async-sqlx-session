@@ -360,7 +360,7 @@ mod tests {
         let cloned = session.clone();
         let cookie_value = store.store_session(session).await?.unwrap();
 
-        let (id, expires, serialized, count): (String, Option<DateTime<Utc>>, String, i64) =
+        let (id, expires, serialized, count): (String, Option<DateTime>, String, i64) =
             sqlx::query_as("select id, expires, session, (select count(*) from async_sessions) from async_sessions")
                 .fetch_one(&mut *store.connection().await?)
                 .await?;
@@ -426,7 +426,7 @@ mod tests {
         let session = store.load_session(cookie_value.clone()).await?.unwrap();
         assert_eq!(session.expiry().unwrap(), &new_expires);
 
-        let (id, expires, count): (String, DateTime<Utc>, i64) = sqlx::query_as(
+        let (id, expires, count): (String, DateTime, i64) = sqlx::query_as(
             "select id, expires, (select count(*) from async_sessions) from async_sessions",
         )
         .fetch_one(&mut *store.connection().await?)
@@ -449,7 +449,7 @@ mod tests {
 
         let cookie_value = store.store_session(session).await?.unwrap();
 
-        let (id, expires, serialized, count): (String, Option<DateTime<Utc>>, String, i64) =
+        let (id, expires, serialized, count): (String, Option<DateTime>, String, i64) =
             sqlx::query_as("select id, expires, session, (select count(*) from async_sessions) from async_sessions")
                 .fetch_one(&mut *store.connection().await?)
                 .await?;
