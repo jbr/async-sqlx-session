@@ -159,7 +159,7 @@ impl SqliteSessionStore {
             )
             "#,
         ))
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await?;
         Ok(())
     }
@@ -238,7 +238,7 @@ impl SqliteSessionStore {
             "#,
         ))
         .bind(Utc::now().timestamp())
-        .execute(&mut connection)
+        .execute(&mut *connection)
         .await?;
 
         Ok(())
@@ -263,7 +263,7 @@ impl SqliteSessionStore {
     pub async fn count(&self) -> sqlx::Result<i32> {
         let (count,) =
             sqlx::query_as(&self.substitute_table_name("SELECT COUNT(*) FROM %%TABLE_NAME%%"))
-                .fetch_one(&mut self.connection().await?)
+                .fetch_one(&mut *self.connection().await?)
                 .await?;
 
         Ok(count)
@@ -284,7 +284,7 @@ impl SessionStore for SqliteSessionStore {
         ))
         .bind(&id)
         .bind(Utc::now().timestamp())
-        .fetch_optional(&mut connection)
+        .fetch_optional(&mut *connection)
         .await?;
 
         Ok(result
@@ -309,7 +309,7 @@ impl SessionStore for SqliteSessionStore {
         .bind(&id)
         .bind(&string)
         .bind(&session.expiry().map(|expiry| expiry.timestamp()))
-        .execute(&mut connection)
+        .execute(&mut *connection)
         .await?;
 
         Ok(session.into_cookie_value())
@@ -324,7 +324,7 @@ impl SessionStore for SqliteSessionStore {
             "#,
         ))
         .bind(&id)
-        .execute(&mut connection)
+        .execute(&mut *connection)
         .await?;
 
         Ok(())
@@ -337,7 +337,7 @@ impl SessionStore for SqliteSessionStore {
             DELETE FROM %%TABLE_NAME%%
             "#,
         ))
-        .execute(&mut connection)
+        .execute(&mut *connection)
         .await?;
 
         Ok(())
@@ -370,7 +370,7 @@ mod tests {
 
         let (id, expires, serialized, count): (String, Option<i64>, String, i64) =
             sqlx::query_as("select id, expires, session, count(*) from async_sessions")
-                .fetch_one(&mut store.connection().await?)
+                .fetch_one(&mut *store.connection().await?)
                 .await?;
 
         assert_eq!(1, count);
@@ -406,7 +406,7 @@ mod tests {
         assert_eq!(session.get::<String>("key").unwrap(), "other value");
 
         let (id, count): (String, i64) = sqlx::query_as("select id, count(*) from async_sessions")
-            .fetch_one(&mut store.connection().await?)
+            .fetch_one(&mut *store.connection().await?)
             .await?;
 
         assert_eq!(1, count);
@@ -435,7 +435,7 @@ mod tests {
 
         let (id, expires, count): (String, i64, i64) =
             sqlx::query_as("select id, expires, count(*) from async_sessions")
-                .fetch_one(&mut store.connection().await?)
+                .fetch_one(&mut *store.connection().await?)
                 .await?;
 
         assert_eq!(1, count);
@@ -457,7 +457,7 @@ mod tests {
 
         let (id, expires, serialized, count): (String, Option<i64>, String, i64) =
             sqlx::query_as("select id, expires, session, count(*) from async_sessions")
-                .fetch_one(&mut store.connection().await?)
+                .fetch_one(&mut *store.connection().await?)
                 .await?;
 
         assert_eq!(1, count);
